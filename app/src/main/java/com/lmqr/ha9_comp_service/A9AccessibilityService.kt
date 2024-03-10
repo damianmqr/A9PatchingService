@@ -7,12 +7,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.preference.PreferenceManager
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -33,19 +35,28 @@ import kotlin.math.min
 
 
 class A9AccessibilityService : AccessibilityService() {
+    private lateinit var preferences: SharedPreferences
+
     private val singlePressRunnable = Runnable {
         openFloatingMenu()
     }
+
+    private var isScreenOn = true
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when(intent.action){
                 Intent.ACTION_SCREEN_OFF -> {
+                    isScreenOn = false
                     closeFloatingMenu()
                     turnOffBrightness()
+                    handler.removeCallbacks(setBrightnessRunnable)
+                    handler.removeCallbacks(periodicBrightnessRunnable)
                 }
                 Intent.ACTION_SCREEN_ON -> {
+                    isScreenOn = true
                     setBrightness()
+                    handler.post(periodicBrightnessRunnable)
                 }
             }
         }
@@ -55,6 +66,7 @@ class A9AccessibilityService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
+        preferences = PreferenceManager.getDefaultSharedPreferences(this)
         val filter = IntentFilter()
         filter.addAction(Intent.ACTION_SCREEN_ON)
         filter.addAction(Intent.ACTION_SCREEN_OFF)
@@ -79,7 +91,8 @@ class A9AccessibilityService : AccessibilityService() {
                         val clickTime: Long = System.currentTimeMillis()
                         if (clickTime - lastClickTime < DOUBLE_CLICK_TIME) {
                             handler.removeCallbacks(singlePressRunnable)
-                            runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
+                            if(isScreenOn)
+                                runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
                         }else{
                             handler.postDelayed(singlePressRunnable, DOUBLE_CLICK_TIME)
                         }
@@ -106,15 +119,21 @@ class A9AccessibilityService : AccessibilityService() {
             Log.e("OverlayPermission", "Activity not found exception", e)
         }
     }
-
+    private var process: Process? = null
+    private var os: DataOutputStream? = null
     private fun runAsRoot(cmds: Array<String>) {
-        val p = Runtime.getRuntime().exec("su")
-        val os = DataOutputStream(p.outputStream)
-        for (tmpCmd in cmds) {
-            os.writeBytes(tmpCmd + "\n")
+        if(process?.isAlive != true)
+            process = Runtime.getRuntime().exec("su")
+
+        if(os == null)
+            os = DataOutputStream(process!!.outputStream)
+
+        os?.run {
+            for (tmpCmd in cmds) {
+                writeBytes(tmpCmd + "\n")
+            }
+            flush()
         }
-        os.writeBytes("exit\n")
-        os.flush()
     }
 
     private fun getAppUsableScreenSize(context: Context): Point {
@@ -158,9 +177,31 @@ class A9AccessibilityService : AccessibilityService() {
         runAsRoot(arrayOf("echo 0 > /sys/class/leds/aw99703-bl-1/brightness"))
     }
 
+    private val brightnessDelay = 100L
+    private var nextBrightnessUpdate = 0L
+
+    private val setBrightnessRunnable = Runnable {
+        if(isScreenOn)
+            runAsRoot(arrayOf("echo ${(temp * brightness * maxBrightness).toInt()}> /sys/class/leds/aw99703-bl-2/brightness;echo ${((1f - temp) * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"))
+    }
+
+    private fun periodicBrightness(){
+        if(isScreenOn) {
+            runAsRoot(arrayOf("echo ${(temp * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-2/brightness;echo ${((1f - temp) * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"))
+            handler.postDelayed(periodicBrightnessRunnable, brightnessDelay * 50)
+        }
+    }
+
+    private val periodicBrightnessRunnable = Runnable {
+        periodicBrightness()
+    }
+
     private fun setBrightness(){
-        runAsRoot(arrayOf("echo ${(temp * brightness * maxBrightness).toInt()}> /sys/class/leds/aw99703-bl-2/brightness"))
-        runAsRoot(arrayOf("echo ${((1f - temp) * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"))
+        val currentTime = System.currentTimeMillis()
+        if(nextBrightnessUpdate < currentTime) {
+            nextBrightnessUpdate = currentTime + brightnessDelay
+            handler.postDelayed(setBrightnessRunnable, brightnessDelay)
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -245,7 +286,9 @@ class A9AccessibilityService : AccessibilityService() {
                 })
 
                 slider.progress = (100 * temp).toInt()
+                seekBarValue.text = slider.progress.toString()
                 slider2.progress = (100 * brightness).toInt()
+                seekBarValue2.text = slider2.progress.toString()
             } else {
                 if (mLayout?.visibility == View.VISIBLE)
                     closeFloatingMenu()
@@ -260,6 +303,12 @@ class A9AccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         unregisterReceiver(receiver);
         contentObserver?.let { contentResolver.unregisterContentObserver(it) }
+        os?.run {
+            writeBytes("exit\n")
+            flush()
+        }
+        preferences.edit().putFloat("brightness", brightness).commit()
+        preferences.edit().putFloat("temp", temp).commit()
         super.onDestroy()
     }
 
@@ -274,7 +323,7 @@ class A9AccessibilityService : AccessibilityService() {
                 val brightnessAmount = Settings.System.getInt(
                     contentResolver,Settings.System.SCREEN_BRIGHTNESS,0)
                 brightness = min(max(brightnessAmount.toFloat()/100f, 0f), 1f)
-                setBrightness();
+                setBrightness()
             }
         }
 
@@ -283,10 +332,12 @@ class A9AccessibilityService : AccessibilityService() {
             true, contentObserver as ContentObserver
         )
 
-        val brightnessAmount = Settings.System.getInt(
-            contentResolver,Settings.System.SCREEN_BRIGHTNESS,0)
-        brightness = min(max(brightnessAmount.toFloat()/100f, 0f), 1f)
-        setBrightness();
+        val brightnessAmount = min(max(Settings.System.getInt(
+            contentResolver,Settings.System.SCREEN_BRIGHTNESS,0), 0), 100)/100f
+        brightness = preferences.getFloat("brightness", brightnessAmount)
+        temp = preferences.getFloat("temp", 0.5f)
+        setBrightness()
+        periodicBrightness()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

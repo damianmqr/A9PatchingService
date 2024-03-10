@@ -17,11 +17,15 @@
         android:id="@+id/linear_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
         android:orientation="horizontal"
         android:layout_gravity="center"
         android:padding="5dp">
         <Button
             android:id="@+id/button1"
+            android:textSize="14sp"
+            android:background="@drawable/drawable_border_button"
+            android:padding="0dp"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
@@ -30,6 +34,9 @@
 
         <Button
             android:id="@+id/button2"
+            android:textSize="14sp"
+            android:background="@drawable/drawable_border_button"
+            android:padding="0dp"
             android:layout_weight="1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -37,6 +44,9 @@
             android:text="Balanced" />
         <Button
             android:id="@+id/button3"
+            android:textSize="14sp"
+            android:background="@drawable/drawable_border_button"
+            android:padding="0dp"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
@@ -45,6 +55,9 @@
 
         <Button
             android:id="@+id/button4"
+            android:textSize="14sp"
+            android:background="@drawable/drawable_border_button"
+            android:padding="0dp"
             android:layout_weight="1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -65,11 +78,10 @@
         android:padding="5dp">
         <TextView
             android:id="@+id/slider_value2"
-            android:layout_weight="0.1"
+            android:layout_weight="0.15"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:textAlignment="center"
-            android:autoSizeTextType="uniform"
             android:layout_marginTop="10dp"
             android:layout_marginBottom="10dp" />
         <SeekBar
@@ -95,11 +107,10 @@
         android:padding="5dp">
         <TextView
             android:id="@+id/slider_value"
-            android:layout_weight="0.1"
+            android:layout_weight="0.15"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:textAlignment="center"
-            android:autoSizeTextType="uniform"
             android:layout_marginTop="10dp"
             android:layout_marginBottom="10dp" />
         <SeekBar
