@@ -33,7 +33,6 @@ import java.io.DataOutputStream
 import kotlin.math.max
 import kotlin.math.min
 
-
 class A9AccessibilityService : AccessibilityService() {
     private lateinit var preferences: SharedPreferences
 
@@ -47,16 +46,18 @@ class A9AccessibilityService : AccessibilityService() {
         override fun onReceive(context: Context, intent: Intent) {
             when(intent.action){
                 Intent.ACTION_SCREEN_OFF -> {
-                    isScreenOn = false
+                    if(BuildConfig.USE_TEMPERATURE) {
+                        isScreenOn = false
+                        handler.removeCallbacks(setBrightnessRunnable)
+                        turnOffBrightness()
+                    }
                     closeFloatingMenu()
-                    turnOffBrightness()
-                    handler.removeCallbacks(setBrightnessRunnable)
-                    handler.removeCallbacks(periodicBrightnessRunnable)
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    isScreenOn = true
-                    setBrightness()
-                    handler.post(periodicBrightnessRunnable)
+                    if(BuildConfig.USE_TEMPERATURE) {
+                        isScreenOn = true
+                        setBrightness()
+                    }
                 }
             }
         }
@@ -66,11 +67,36 @@ class A9AccessibilityService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
-        preferences = PreferenceManager.getDefaultSharedPreferences(this)
-        val filter = IntentFilter()
-        filter.addAction(Intent.ACTION_SCREEN_ON)
-        filter.addAction(Intent.ACTION_SCREEN_OFF)
-        registerReceiver(receiver, filter)
+        if(BuildConfig.USE_TEMPERATURE) {
+            preferences = PreferenceManager.getDefaultSharedPreferences(this)
+            val filter = IntentFilter()
+            filter.addAction(Intent.ACTION_SCREEN_ON)
+            filter.addAction(Intent.ACTION_SCREEN_OFF)
+            registerReceiver(receiver, filter)
+
+            contentObserver = object : ContentObserver(handler) {
+                override fun onChange(selfChange: Boolean) {
+                    val brightnessAmount = Settings.System.getInt(
+                        contentResolver, Settings.System.SCREEN_BRIGHTNESS, 0
+                    )
+                    brightness = min(max(brightnessAmount.toFloat() / 100f, 0f), 1f)
+                }
+            }
+
+            contentResolver.registerContentObserver(
+                Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS),
+                true, contentObserver as ContentObserver
+            )
+
+            brightness = min(
+                max(
+                    Settings.System.getInt(
+                        contentResolver, Settings.System.SCREEN_BRIGHTNESS, 0
+                    ), 0
+                ), 100
+            ) / 100f
+            temp = preferences.getFloat("temp", 0.5f)
+        }
     }
 
     override fun onInterrupt() {
@@ -168,39 +194,49 @@ class A9AccessibilityService : AccessibilityService() {
         visibility = View.GONE
     }
 
-    private var brightness: Float = 0.5f
-    private var temp: Float = 0.5f
+    private var brightness: Float = 0.0f
+        get() = field
+        set(v) { field = v; setBrightness(); }
+
+    private var temp: Float = 0.0f
+        get() = field
+        set(v) { field = v; setBrightness() }
+
     private val maxBrightness: Int = 2000
 
     private fun turnOffBrightness(){
-        runAsRoot(arrayOf("echo 0 > /sys/class/leds/aw99703-bl-2/brightness"))
-        runAsRoot(arrayOf("echo 0 > /sys/class/leds/aw99703-bl-1/brightness"))
+        if(BuildConfig.USE_TEMPERATURE) {
+            runAsRoot(
+                arrayOf(
+                    "echo 0 > /sys/class/backlight/aw99703-bl-2/brightness",
+                    "echo 0 > /sys/class/backlight/aw99703-bl-1/brightness"
+                )
+            )
+        }
     }
 
     private val brightnessDelay = 100L
     private var nextBrightnessUpdate = 0L
 
     private val setBrightnessRunnable = Runnable {
-        if(isScreenOn)
-            runAsRoot(arrayOf("echo ${(temp * brightness * maxBrightness).toInt()}> /sys/class/leds/aw99703-bl-2/brightness;echo ${((1f - temp) * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"))
-    }
-
-    private fun periodicBrightness(){
-        if(isScreenOn) {
-            runAsRoot(arrayOf("echo ${(temp * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-2/brightness;echo ${((1f - temp) * brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"))
-            handler.postDelayed(periodicBrightnessRunnable, brightnessDelay * 50)
+        if (BuildConfig.USE_TEMPERATURE) {
+            if (isScreenOn)
+                runAsRoot(
+                    arrayOf(
+                        "echo ${(temp * brightness * maxBrightness).toInt()}> /sys/class/backlight/aw99703-bl-2/brightness",
+                        "echo ${((1f - temp) * brightness * maxBrightness).toInt()} > /sys/class/backlight/aw99703-bl-1/brightness"
+                    )
+                )
         }
     }
 
-    private val periodicBrightnessRunnable = Runnable {
-        periodicBrightness()
-    }
-
     private fun setBrightness(){
-        val currentTime = System.currentTimeMillis()
-        if(nextBrightnessUpdate < currentTime) {
-            nextBrightnessUpdate = currentTime + brightnessDelay
-            handler.postDelayed(setBrightnessRunnable, brightnessDelay)
+        if(BuildConfig.USE_TEMPERATURE) {
+            val currentTime = System.currentTimeMillis()
+            if (nextBrightnessUpdate < currentTime) {
+                nextBrightnessUpdate = currentTime + brightnessDelay
+                handler.postDelayed(setBrightnessRunnable, brightnessDelay)
+            }
         }
     }
 
@@ -221,7 +257,11 @@ class A9AccessibilityService : AccessibilityService() {
                 lp.gravity = Gravity.BOTTOM
                 lp.y = getNavBarHeight()
                 val inflater = LayoutInflater.from(this)
-                inflater.inflate(R.layout.floating_menu_layout, mLayout)
+                if(BuildConfig.USE_TEMPERATURE) {
+                    inflater.inflate(R.layout.floating_menu_layout, mLayout)
+                }else{
+                    inflater.inflate(R.layout.floating_menu_layout_no_temp, mLayout)
+                }
                 mLayout!!.setPadding(20, 0, 20, 0)
                 mLayout!!.setOnTouchListener { v, event ->
                     if(event.action == MotionEvent.ACTION_OUTSIDE)
@@ -234,66 +274,45 @@ class A9AccessibilityService : AccessibilityService() {
                 val button2 = mLayout!!.findViewById<Button>(R.id.button2)
                 val button3 = mLayout!!.findViewById<Button>(R.id.button3)
                 val button4 = mLayout!!.findViewById<Button>(R.id.button4)
-                val slider = mLayout!!.findViewById<SeekBar>(R.id.slider)
-                val slider2 = mLayout!!.findViewById<SeekBar>(R.id.slider2)
+
 
                 button1.setOnClickListener { v: View? -> runAsRoot(arrayOf("echo 515 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
                 button2.setOnClickListener { v: View? -> runAsRoot(arrayOf("echo 513 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
                 button3.setOnClickListener { v: View? -> runAsRoot(arrayOf("echo 518 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
                 button4.setOnClickListener { v: View? -> runAsRoot(arrayOf("echo 521 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
 
-                val seekBarValue = mLayout!!.findViewById<TextView>(R.id.slider_value)
-                val seekBarValue2 = mLayout!!.findViewById<TextView>(R.id.slider_value2)
+                if(BuildConfig.USE_TEMPERATURE) {
+                    val slider = mLayout!!.findViewById<SeekBar>(R.id.slider)
+                    val seekBarValue = mLayout!!.findViewById<TextView>(R.id.slider_value)
 
-                slider.setOnSeekBarChangeListener(object : OnSeekBarChangeListener {
-                    override fun onProgressChanged(
-                        seekBar: SeekBar,
-                        progress: Int,
-                        fromUser: Boolean
-                    ) {
-                        seekBarValue.text = progress.toString()
-                        temp = min(max(progress.toFloat()/100f, 0f), 1f)
-                        setBrightness()
-                    }
+                    slider.setOnSeekBarChangeListener(object : OnSeekBarChangeListener {
+                        override fun onProgressChanged(
+                            seekBar: SeekBar,
+                            progress: Int,
+                            fromUser: Boolean
+                        ) {
+                            seekBarValue.text = progress.toString()
+                            temp = min(max(progress.toFloat() / 100f, 0f), 1f)
+                        }
 
-                    override fun onStartTrackingTouch(seekBar: SeekBar) {
-                        // Handle slider touch start
-                    }
+                        override fun onStartTrackingTouch(seekBar: SeekBar) {
+                            // Handle slider touch start
+                        }
 
-                    override fun onStopTrackingTouch(seekBar: SeekBar) {
-                        // Handle slider touch end
-                    }
-                })
+                        override fun onStopTrackingTouch(seekBar: SeekBar) {
+                            // Handle slider touch end
+                        }
+                    })
 
-                slider2.setOnSeekBarChangeListener(object : OnSeekBarChangeListener {
-                    override fun onProgressChanged(
-                        seekBar: SeekBar,
-                        progress: Int,
-                        fromUser: Boolean
-                    ) {
-                        seekBarValue2.text = progress.toString()
-                        brightness = min(max(progress.toFloat()/100f, 0f), 1f)
-                        setBrightness()
-                    }
-
-                    override fun onStartTrackingTouch(seekBar: SeekBar) {
-                        // Handle slider touch start
-                    }
-
-                    override fun onStopTrackingTouch(seekBar: SeekBar) {
-                        // Handle slider touch end
-                    }
-                })
-
-                slider.progress = (100 * temp).toInt()
-                seekBarValue.text = slider.progress.toString()
-                slider2.progress = (100 * brightness).toInt()
-                seekBarValue2.text = slider2.progress.toString()
+                    slider.progress = (100 * temp).toInt()
+                    seekBarValue.text = slider.progress.toString()
+                }
             } else {
                 if (mLayout?.visibility == View.VISIBLE)
                     closeFloatingMenu()
-                else
+                else {
                     mLayout?.visibility = View.VISIBLE
+                }
             }
         }catch (ex: Exception){
             ex.printStackTrace()
@@ -301,43 +320,33 @@ class A9AccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(receiver);
         contentObserver?.let { contentResolver.unregisterContentObserver(it) }
         os?.run {
             writeBytes("exit\n")
             flush()
         }
-        preferences.edit().putFloat("brightness", brightness).commit()
-        preferences.edit().putFloat("temp", temp).commit()
+
+        if(BuildConfig.USE_TEMPERATURE) {
+            runAsRoot(
+                arrayOf(
+                    "chmod 644 /sys/class/leds/aw99703-bl-2/brightness",
+                    "chmod 644 /sys/class/leds/aw99703-bl-1/brightness",
+                    "echo 0 > /sys/class/leds/aw99703-bl-1/brightness"
+                )
+            )
+            unregisterReceiver(receiver);
+            preferences.edit().putFloat("temp", temp).commit()
+        }
         super.onDestroy()
     }
 
     private var contentObserver: ContentObserver? = null
 
     override fun onServiceConnected() {
-        //runAsRoot(arrayOf("while :; do sf=\$(service list | grep -c \"SurfaceFlinger\"); if [ \$sf -gt 0 ]; then service call SurfaceFlinger 1008 i32 1; break; else sleep 2; fi; done &"))
-        contentObserver = object: ContentObserver(handler)
-        {
-            override fun onChange(selfChange:Boolean)
-            {
-                val brightnessAmount = Settings.System.getInt(
-                    contentResolver,Settings.System.SCREEN_BRIGHTNESS,0)
-                brightness = min(max(brightnessAmount.toFloat()/100f, 0f), 1f)
-                setBrightness()
-            }
-        }
-
-        contentResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS),
-            true, contentObserver as ContentObserver
-        )
-
-        val brightnessAmount = min(max(Settings.System.getInt(
-            contentResolver,Settings.System.SCREEN_BRIGHTNESS,0), 0), 100)/100f
-        brightness = preferences.getFloat("brightness", brightnessAmount)
-        temp = preferences.getFloat("temp", 0.5f)
-        setBrightness()
-        periodicBrightness()
+        if(BuildConfig.USE_TEMPERATURE)
+            runAsRoot(arrayOf("chmod 444 /sys/class/leds/aw99703-bl-2/brightness", "chmod 444 /sys/class/leds/aw99703-bl-1/brightness"))
+        else
+            runAsRoot(arrayOf("chmod 644 /sys/class/leds/aw99703-bl-2/brightness", "chmod 644 /sys/class/leds/aw99703-bl-1/brightness"))
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

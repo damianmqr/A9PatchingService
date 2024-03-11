@@ -18,9 +18,25 @@ android {
     }
 
     buildTypes {
-        release {
+        debug {
+            buildConfigField("boolean", "USE_TEMPERATURE", "true")
             isMinifyEnabled = false
+        }
+
+        release {
+            buildConfigField("boolean", "USE_TEMPERATURE", "true")
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+
+        create("releasenotemp") {
+            applicationIdSuffix = ".no_temp"
+            versionNameSuffix = "np_temp"
+            buildConfigField("boolean", "USE_TEMPERATURE", "false")
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
