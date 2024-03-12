@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="16dp"
@@ -63,34 +64,12 @@
             android:layout_height="wrap_content"
             android:text="Speed" />
     </LinearLayout>
-    <TextView
-        android:id="@+id/temperature_text"
+    <Switch
+        android:id="@+id/night_switch"
+        android:layout_marginTop="10dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textAlignment="center"
-        android:layout_marginTop="5dp"
-        android:text="Screen Temperature"/>
-    <LinearLayout
-        android:id="@+id/linear_layout2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="5dp">
-        <TextView
-            android:id="@+id/slider_value"
-            android:layout_weight="0.15"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:textAlignment="center"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="10dp" />
-        <SeekBar
-            android:id="@+id/slider"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:paddingTop="20dp"
-            android:paddingBottom="20dp"
-            android:layout_weight="1" />
-    </LinearLayout>
-
+        android:layout_height="40dp"
+        android:layout_marginHorizontal="15dp"
+        android:text="Night Mode"
+        tools:ignore="UseSwitchCompatOrMaterialXml" />
 </LinearLayout>
