@@ -11,8 +11,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Ha9_comp_service"
-        tools:targetApi="31" >
+        android:theme="@style/Theme.Ha9_comp_service">
         <service android:name=".A9AccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:label="A9 Accessibility Service"

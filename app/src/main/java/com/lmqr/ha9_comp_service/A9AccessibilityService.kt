@@ -236,7 +236,7 @@ class A9AccessibilityService : AccessibilityService() {
                     "echo 0 > /sys/class/leds/aw99703-bl-1/brightness"
                 )
             )
-            unregisterReceiver(receiver);
+            unregisterReceiver(receiver)
             rootCommandRunner.onDestroy()
         }
         super.onDestroy()

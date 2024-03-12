@@ -9,21 +9,18 @@ enum class TemperatureMode{
     None
 }
 
-class TemperatureModeManager{
+class TemperatureModeManager(
+    mode: TemperatureMode,
+    private var rootCommandRunner: RootCommandRunner
+) {
 
     private val handler = Handler(Looper.getMainLooper())
 
     private var currentMode: TemperatureMode = TemperatureMode.None
-    private lateinit var rootCommandRunner: RootCommandRunner
 
     var brightness: Float = 0.0f
-        get() = field
         set(v) { field = v; setBrightness(); }
 
-    constructor(mode: TemperatureMode, rootCommandRunner: RootCommandRunner){
-        this.rootCommandRunner = rootCommandRunner
-        setMode(mode)
-    }
     fun setMode(mode: TemperatureMode){
         if(currentMode != mode) {
             currentMode = mode
@@ -82,6 +79,10 @@ class TemperatureModeManager{
                 handler.postDelayed(setBrightnessRunnable, brightnessDelay + 10L)
             }
         }
+    }
+
+    init {
+        setMode(mode)
     }
 
 }
