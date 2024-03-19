@@ -22,6 +22,9 @@ class RefreshModeManager(
         private set(v) { field = v; applyMode() }
     private var currentClassifier = ""
     fun onAppChange(packageName: String) = packageName.toClassifier().run{
+        if(this == ignoreClassifier)
+            return
+
         if(this != currentClassifier){
             currentClassifier = this
             val tempMode = RefreshMode.fromInt(
@@ -56,10 +59,13 @@ class RefreshModeManager(
 
     companion object{
         const val systemClassifier = "android"
+        const val ignoreClassifier = "_ignore_"
     }
 }
 
 private fun String.toClassifier(): String {
+    if(startsWith("com.android.systemui"))
+        return RefreshModeManager.ignoreClassifier
     if(startsWith("com.android"))
         return RefreshModeManager.systemClassifier
     return this
