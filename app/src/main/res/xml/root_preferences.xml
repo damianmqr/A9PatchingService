@@ -34,7 +34,7 @@
             app:summary="Choose the default mode to use with new applications."
             app:entries="@array/refresh_options"
             app:entryValues="@array/refresh_values"
-            app:defaultValue="Balanced" />
+            app:defaultValue="2" />
     </PreferenceCategory>
 
 </PreferenceScreen>
