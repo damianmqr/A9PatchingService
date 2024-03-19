@@ -2,6 +2,7 @@ package com.lmqr.ha9_comp_service
 
 import android.os.Handler
 import android.os.Looper
+import kotlin.math.min
 
 enum class TemperatureMode{
     White,
@@ -11,6 +12,7 @@ enum class TemperatureMode{
 
 class TemperatureModeManager(
     mode: TemperatureMode,
+    initialBrightness: Float,
     private var rootCommandRunner: RootCommandRunner
 ) {
 
@@ -18,7 +20,7 @@ class TemperatureModeManager(
 
     private var currentMode: TemperatureMode = TemperatureMode.None
 
-    var brightness: Float = 0.0f
+    var brightness: Float = initialBrightness
         set(v) { field = v; setBrightness(); }
 
     fun setMode(mode: TemperatureMode){
@@ -27,17 +29,17 @@ class TemperatureModeManager(
             when(mode){
                 TemperatureMode.Night -> {
                     rootCommandRunner.runAsRoot(arrayOf(
+                        "echo ${(brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness",
                         "echo 0 > /sys/class/leds/aw99703-bl-2/brightness",
-                        "chmod 644 /sys/class/leds/aw99703-bl-1/brightness",
                         "chmod 444 /sys/class/leds/aw99703-bl-2/brightness",
-                        "echo ${(brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"
                         ))
                 }
                 TemperatureMode.White, TemperatureMode.None -> {
                     rootCommandRunner.runAsRoot(arrayOf(
                         "chmod 644 /sys/class/leds/aw99703-bl-2/brightness",
-                        "echo 0 > /sys/class/leds/aw99703-bl-1/brightness",
                         "echo ${(brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-2/brightness",
+                        "echo 0 > /sys/class/leds/aw99703-bl-1/brightness",
+                        "settings put system screen_brightness \$(settings get system screen_brightness)",
                     ))
                 }
             }
@@ -48,7 +50,7 @@ class TemperatureModeManager(
 
     fun onScreenChange(isScreenOn: Boolean){
         screenOn = isScreenOn
-        if (BuildConfig.USE_TEMPERATURE && currentMode == TemperatureMode.Night){
+        if (currentMode == TemperatureMode.Night){
             if(screenOn)
                 setBrightness()
             else
@@ -62,7 +64,7 @@ class TemperatureModeManager(
     private var nextBrightnessUpdate = 0L
 
     private val setBrightnessRunnable: Runnable = Runnable {
-        if (BuildConfig.USE_TEMPERATURE && currentMode == TemperatureMode.Night) {
+        if (currentMode == TemperatureMode.Night) {
             rootCommandRunner.runAsRoot(
                 arrayOf(
                     "echo ${(brightness * maxBrightness).toInt()} > /sys/class/leds/aw99703-bl-1/brightness"
@@ -72,7 +74,7 @@ class TemperatureModeManager(
     }
 
     private fun setBrightness(){
-        if(BuildConfig.USE_TEMPERATURE && currentMode == TemperatureMode.Night) {
+        if(currentMode == TemperatureMode.Night) {
             val currentTime = System.currentTimeMillis()
             if (nextBrightnessUpdate < currentTime) {
                 nextBrightnessUpdate = currentTime + brightnessDelay

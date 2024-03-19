@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">ha9_comp_service</string>
+    <string name="title_activity_settings">SettingsActivity</string>
+    <string name="night_mode">Night Mode</string>
+    <string name="speed">Speed</string>
+    <string name="smooth">Smooth</string>
+    <string name="balanced">Balanced</string>
+    <string name="clear">Clear</string>
+    <string name="refresh_mode">Refresh Mode</string>
 </resources>

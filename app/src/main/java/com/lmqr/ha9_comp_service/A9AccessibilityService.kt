@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.graphics.PixelFormat
 import android.graphics.Point
@@ -22,29 +23,27 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.Switch
+import androidx.preference.PreferenceManager
+import com.lmqr.ha9_comp_service.databinding.FloatingMenuLayoutBinding
 import kotlin.math.max
 import kotlin.math.min
 
-class A9AccessibilityService : AccessibilityService() {
+
+class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
     private val rootCommandRunner = RootCommandRunner()
-    private val temperatureModeManager = TemperatureModeManager(TemperatureMode.White, rootCommandRunner)
+    private lateinit var temperatureModeManager: TemperatureModeManager
+    private lateinit var refreshModeManager: RefreshModeManager
+    private lateinit var sharedPreferences: SharedPreferences
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when(intent.action){
                 Intent.ACTION_SCREEN_OFF -> {
-                    if(BuildConfig.USE_TEMPERATURE) {
-                        temperatureModeManager.onScreenChange(false)
-                    }
-                    closeFloatingMenu()
+                    temperatureModeManager.onScreenChange(false)
+                    menuBinding.close()
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    if(BuildConfig.USE_TEMPERATURE) {
-                        temperatureModeManager.onScreenChange(true)
-                    }
+                    temperatureModeManager.onScreenChange(true)
                 }
             }
         }
@@ -57,41 +56,51 @@ class A9AccessibilityService : AccessibilityService() {
             Settings.System.getInt(
                 contentResolver, Settings.System.SCREEN_BRIGHTNESS, 0
             ) - 1, 0
-        ), 100
-    ) / 100f
+        ), 255
+    ) / 255f
 
     override fun onCreate() {
         super.onCreate()
-        if(BuildConfig.USE_TEMPERATURE) {
-            val filter = IntentFilter()
-            filter.addAction(Intent.ACTION_SCREEN_ON)
-            filter.addAction(Intent.ACTION_SCREEN_OFF)
-            registerReceiver(receiver, filter)
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+        sharedPreferences.registerOnSharedPreferenceChangeListener(this)
+        refreshModeManager = RefreshModeManager(
+            sharedPreferences,
+            rootCommandRunner
+        )
+        temperatureModeManager = TemperatureModeManager(
+            TemperatureMode.White,
+            getBrightnessFromSetting(),
+            rootCommandRunner,
+        )
 
-            contentObserver = object : ContentObserver(handler) {
-                override fun onChange(selfChange: Boolean) {
-                    temperatureModeManager.brightness = getBrightnessFromSetting()
-                }
+        val filter = IntentFilter()
+        filter.addAction(Intent.ACTION_SCREEN_ON)
+        filter.addAction(Intent.ACTION_SCREEN_OFF)
+        registerReceiver(receiver, filter)
+
+        contentObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                temperatureModeManager.brightness = getBrightnessFromSetting()
             }
-
-            contentResolver.registerContentObserver(
-                Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS),
-                true, contentObserver as ContentObserver
-            )
-
-            temperatureModeManager.brightness = getBrightnessFromSetting()
         }
+
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS),
+            true, contentObserver as ContentObserver
+        )
     }
 
     override fun onInterrupt() {
 
     }
 
-    private val DOUBLE_CLICK_TIME: Long = 250
     private var lastClickTime: Long = 0
 
     private val singlePressRunnable = Runnable {
-        rootCommandRunner.runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
+        if(sharedPreferences.getBoolean("swap_clear_button", false))
+            openFloatingMenu()
+        else
+            rootCommandRunner.runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -103,11 +112,14 @@ class A9AccessibilityService : AccessibilityService() {
                     else {
 
                         val clickTime: Long = System.currentTimeMillis()
-                        if (clickTime - lastClickTime < DOUBLE_CLICK_TIME) {
+                        if (clickTime - lastClickTime < 350) {
                             handler.removeCallbacks(singlePressRunnable)
-                            openFloatingMenu()
+                            if(sharedPreferences.getBoolean("swap_clear_button", false))
+                                rootCommandRunner.runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
+                            else
+                                openFloatingMenu()
                         }else{
-                            handler.postDelayed(singlePressRunnable, DOUBLE_CLICK_TIME)
+                            handler.postDelayed(singlePressRunnable, 350)
                         }
                         lastClickTime = clickTime
                     }
@@ -159,67 +171,88 @@ class A9AccessibilityService : AccessibilityService() {
         return 0
     }
 
-    private var mLayout: LinearLayout? = null
+    private var menuBinding: FloatingMenuLayoutBinding? = null
 
-    private fun closeFloatingMenu() = mLayout?.run{
-        visibility = View.GONE
-    }
-
-    @SuppressLint("ClickableViewAccessibility", "UseSwitchCompatOrMaterialCode")
+    @SuppressLint("ClickableViewAccessibility", "InflateParams")
     private fun openFloatingMenu() {
         try {
-            if (mLayout == null) {
+            menuBinding?.run{
+                if (root.visibility == View.VISIBLE) {
+                    root.visibility = View.GONE
+                }else{
+                    root.visibility = View.VISIBLE
+                    nightSwitch.visibility =
+                        if(sharedPreferences.getBoolean("disable_nightmode", false))
+                            View.GONE
+                        else View.VISIBLE
+                    updateButtons(refreshModeManager.currentMode)
+                }
+            }?:run{
                 rootCommandRunner.runAsRoot(arrayOf("service call SurfaceFlinger 1008 i32 1"))
 
                 val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-                mLayout = LinearLayout(this)
-                val lp = WindowManager.LayoutParams()
-                lp.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-                lp.format = PixelFormat.TRANSLUCENT
-                lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-                lp.width = WindowManager.LayoutParams.MATCH_PARENT
-                lp.height = WindowManager.LayoutParams.WRAP_CONTENT
-                lp.gravity = Gravity.BOTTOM
-                lp.y = getNavBarHeight()
                 val inflater = LayoutInflater.from(this)
-                if(BuildConfig.USE_TEMPERATURE) {
-                    inflater.inflate(R.layout.floating_menu_layout, mLayout)
-                }else{
-                    inflater.inflate(R.layout.floating_menu_layout_no_temp, mLayout)
+                val view = inflater.inflate(R.layout.floating_menu_layout, null, false)
+
+                val layoutParams = WindowManager.LayoutParams().apply {
+                    type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                    format = PixelFormat.TRANSLUCENT
+                    flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                    width = WindowManager.LayoutParams.MATCH_PARENT
+                    height = WindowManager.LayoutParams.WRAP_CONTENT
+                    gravity = Gravity.BOTTOM
+                    y = getNavBarHeight()
                 }
-                mLayout!!.setPadding(20, 0, 20, 0)
-                mLayout!!.setOnTouchListener { v, event ->
-                    if(event.action == MotionEvent.ACTION_OUTSIDE)
-                        closeFloatingMenu()
-                    false
-                }
-                wm.addView(mLayout, lp)
 
-                val button1 = mLayout!!.findViewById<Button>(R.id.button1)
-                val button2 = mLayout!!.findViewById<Button>(R.id.button2)
-                val button3 = mLayout!!.findViewById<Button>(R.id.button3)
-                val button4 = mLayout!!.findViewById<Button>(R.id.button4)
+                menuBinding = FloatingMenuLayoutBinding.bind(view).apply {
+                    root.setOnTouchListener { _, event ->
+                        if (event.action == MotionEvent.ACTION_OUTSIDE)
+                            close()
+                        false
+                    }
 
+                    button1.setOnClickListener {
+                        refreshModeManager.changeMode(RefreshMode.CLEAR)
+                        updateButtons(refreshModeManager.currentMode)
+                    }
+                    button2.setOnClickListener {
+                        refreshModeManager.changeMode(RefreshMode.BALANCED)
+                        updateButtons(refreshModeManager.currentMode)
+                    }
+                    button3.setOnClickListener {
+                        refreshModeManager.changeMode(RefreshMode.SMOOTH)
+                        updateButtons(refreshModeManager.currentMode)
+                    }
+                    button4.setOnClickListener {
+                        refreshModeManager.changeMode(RefreshMode.SPEED)
+                        updateButtons(refreshModeManager.currentMode)
+                    }
 
-                button1.setOnClickListener { v: View? -> rootCommandRunner.runAsRoot(arrayOf("echo 515 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
-                button2.setOnClickListener { v: View? -> rootCommandRunner.runAsRoot(arrayOf("echo 513 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
-                button3.setOnClickListener { v: View? -> rootCommandRunner.runAsRoot(arrayOf("echo 518 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
-                button4.setOnClickListener { v: View? -> rootCommandRunner.runAsRoot(arrayOf("echo 521 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode")) }
-
-                if(BuildConfig.USE_TEMPERATURE) {
-                    val switch = mLayout!!.findViewById<Switch>(R.id.night_switch)
-                    switch.setOnCheckedChangeListener{ v, checked ->
-                        if(checked)
+                    settingsIcon.setOnClickListener {
+                        val settingsIntent = Intent(
+                            this@A9AccessibilityService,
+                            SettingsActivity::class.java
+                        )
+                        settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        close()
+                        startActivity(settingsIntent)
+                    }
+                    nightSwitch.setOnCheckedChangeListener { _, checked ->
+                        if (checked)
                             temperatureModeManager.setMode(TemperatureMode.Night)
                         else
                             temperatureModeManager.setMode(TemperatureMode.White)
                     }
+
+                    nightSwitch.visibility =
+                        if(sharedPreferences.getBoolean("disable_nightmode", false))
+                            View.GONE
+                        else View.VISIBLE
+
+                    updateButtons(refreshModeManager.currentMode)
+
+                    wm.addView(root, layoutParams)
                 }
-            } else {
-                if (mLayout?.visibility == View.VISIBLE)
-                    closeFloatingMenu()
-                else
-                    mLayout?.visibility = View.VISIBLE
             }
         }catch (ex: Exception){
             ex.printStackTrace()
@@ -228,17 +261,17 @@ class A9AccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         contentObserver?.let { contentResolver.unregisterContentObserver(it) }
-        if(BuildConfig.USE_TEMPERATURE) {
-            rootCommandRunner.runAsRoot(
-                arrayOf(
-                    "chmod 644 /sys/class/leds/aw99703-bl-2/brightness",
-                    "chmod 644 /sys/class/leds/aw99703-bl-1/brightness",
-                    "echo 0 > /sys/class/leds/aw99703-bl-1/brightness"
-                )
+        rootCommandRunner.runAsRoot(
+            arrayOf(
+                "chmod 644 /sys/class/leds/aw99703-bl-2/brightness",
+                "chmod 644 /sys/class/leds/aw99703-bl-1/brightness",
+                "echo 0 > /sys/class/leds/aw99703-bl-1/brightness",
+                "settings put system screen_brightness \$(settings get system screen_brightness)",
             )
-            unregisterReceiver(receiver)
-            rootCommandRunner.onDestroy()
-        }
+        )
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
+        unregisterReceiver(receiver)
+        rootCommandRunner.onDestroy()
         super.onDestroy()
     }
 
@@ -248,7 +281,38 @@ class A9AccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if(event?.equals(AccessibilityEvent.TYPE_WINDOWS_CHANGED) == true)
-            closeFloatingMenu()
+        if(event?.eventType?.equals(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) == true) {
+            event.packageName?.toString()?.let { name ->
+                if(name != packageName) {
+                    refreshModeManager.onAppChange(name)
+                    menuBinding.updateButtons(refreshModeManager.currentMode)
+                }
+            }
+        }
     }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        when(key){
+            "disable_nightmode" -> {
+                if(sharedPreferences?.getBoolean("disable_nightmode", false) == true){
+                    temperatureModeManager.setMode(TemperatureMode.White)
+                }
+            }
+        }
+    }
+}
+
+fun FloatingMenuLayoutBinding?.close() = this?.run{
+    root.visibility = View.GONE
+}
+
+fun FloatingMenuLayoutBinding?.updateButtons(mode: RefreshMode) = this?.run{
+        listOf(button1, button2, button3, button4).forEach { it.setBackgroundResource(R.drawable.drawable_border_normal) }
+        when (mode) {
+            RefreshMode.CLEAR -> button1
+            RefreshMode.BALANCED -> button2
+            RefreshMode.SMOOTH -> button3
+            RefreshMode.SPEED -> button4
+            else -> null
+        }?.setBackgroundResource(R.drawable.drawable_border_pressed)
 }

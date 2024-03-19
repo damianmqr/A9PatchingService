@@ -1,0 +1,40 @@
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="EInk Service Settings">
+
+        <SwitchPreferenceCompat
+            app:key="swap_clear_button"
+            app:summaryOff="Single Press for Screen Clear\nDouble Press for Menu Access"
+            app:summaryOn="Single Press for Menu Access\nDouble Press for Screen Clear"
+            app:title="Swap Clear and Menu" />
+
+
+        <SwitchPreferenceCompat
+            app:key="disable_nightmode"
+            app:summaryOff="Disable toggle for nightmode, the screen will only use white light"
+            app:summaryOn="Enable nightmode toggle in menu"
+            app:title="Disable Nightmode" />
+
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Refresh Mode Settings">
+        <SwitchPreferenceCompat
+            app:key="disable_perapprefresh"
+            app:disableDependentsState="true"
+            app:summaryOff="Disable setting refresh mode per application"
+            app:summaryOn="Enable setting refresh mode per application"
+            app:title="Disable Per-App Refresh Mode" />
+
+
+        <ListPreference
+            app:dependency="disable_perapprefresh"
+            app:key="refresh_setting"
+            app:title="Default Refresh Mode"
+            app:summary="Choose the default mode to use with new applications."
+            app:entries="@array/refresh_options"
+            app:entryValues="@array/refresh_values"
+            app:defaultValue="Balanced" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
