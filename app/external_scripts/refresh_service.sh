@@ -1,8 +1,8 @@
 #!/system/bin/sh
 
-sleep 15
 (
 trap '' HUP
+sleep 15
 FIFO_PATH="$(awk '/^com.lmqr.ha9_comp_service/ {print $4}' /data/system/packages.list)/files/refresh_screen_fifo"
 
 rm -f "$FIFO_PATH"
@@ -37,7 +37,7 @@ do
           echo 518 > "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode"
         ;;
         'p')# Speed
-          echo 521 > "/sys/devictrap '' HUPes/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode"
+          echo 521 > "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode"
         ;;
         "bl")# Block display
           echo 0 > "/sys/class/leds/aw99703-bl-2/brightness"

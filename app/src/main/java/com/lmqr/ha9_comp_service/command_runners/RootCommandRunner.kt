@@ -43,7 +43,7 @@ class RootCommandRunner: CommandRunner {
                                 "echo 518 > \"/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode\""
                             )
                             "p" -> arrayOf(
-                                "echo 521 > \"/sys/devictrap '' HUPes/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode\""
+                                "echo 521 > \"/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode\""
                             )
                             "bl" -> arrayOf(
                                 "echo 0 > \"/sys/class/leds/aw99703-bl-2/brightness\"",

@@ -29,7 +29,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.command_runners.CommandRunner
-import com.lmqr.ha9_comp_service.command_runners.FIFOCommandRunner
+import com.lmqr.ha9_comp_service.command_runners.RootCommandRunner
 import com.lmqr.ha9_comp_service.databinding.FloatingMenuLayoutBinding
 import kotlin.math.max
 import kotlin.math.min
@@ -70,7 +70,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
 
     override fun onCreate() {
         super.onCreate()
-        commandRunner = FIFOCommandRunner(filesDir.absolutePath)
+        commandRunner = RootCommandRunner()// FIFOCommandRunner(filesDir.absolutePath)
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
         refreshModeManager = RefreshModeManager(
