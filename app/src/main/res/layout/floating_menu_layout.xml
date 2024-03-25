@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="16dp"
-    android:background="@drawable/drawable_border"
+    android:padding="14dp"
+    android:background="@drawable/inset_border_drawable"
     android:orientation="vertical">
     <LinearLayout
         android:id="@+id/linear_layout_top"
@@ -19,80 +18,67 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:textAlignment="center"
-            android:textSize="18sp"
+            android:textSize="15sp"
+            android:textColor="@color/black"
             android:text="@string/refresh_mode"/>
 
         <ImageView
             android:id="@+id/settings_icon"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:padding="5dp"
+            android:layout_width="25dp"
+            android:layout_height="25dp"
+            android:padding="2dp"
             android:src="@drawable/baseline_settings_24" />
     </LinearLayout>
     <LinearLayout
         android:id="@+id/linear_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="5dp"
         android:orientation="horizontal"
         android:layout_gravity="center"
         android:padding="5dp">
         <Button
             android:id="@+id/button1"
-            android:textSize="14sp"
-            android:background="@drawable/drawable_border_button"
-            android:paddingHorizontal="0dp"
-            android:paddingVertical="15dp"
-            android:layout_width="0dp"
+            style="@style/MenuButtonStyle"
             android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
-            android:textAlignment="center"
+            android:layout_width="0dp"
+            android:layout_height="35dp"
+            android:layout_marginEnd="5dp"
             android:text="@string/clear"/>
 
         <Button
             android:id="@+id/button2"
-            android:textSize="14sp"
-            android:background="@drawable/drawable_border_button"
-            android:paddingHorizontal="0dp"
-            android:paddingVertical="15dp"
+            style="@style/MenuButtonStyle"
             android:layout_weight="1"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
-            android:textAlignment="center"
+            android:layout_height="35dp"
+            android:layout_marginEnd="5dp"
             android:text="@string/balanced"/>
         <Button
             android:id="@+id/button3"
-            android:textSize="14sp"
-            android:background="@drawable/drawable_border_button"
-            android:paddingHorizontal="0dp"
-            android:paddingVertical="15dp"
-            android:layout_width="0dp"
+            style="@style/MenuButtonStyle"
             android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
-            android:textAlignment="center"
+            android:layout_width="0dp"
+            android:layout_height="35dp"
+            android:layout_marginEnd="5dp"
             android:text="@string/smooth"/>
 
         <Button
             android:id="@+id/button4"
-            android:textSize="14sp"
-            android:background="@drawable/drawable_border_button"
-            android:paddingHorizontal="0dp"
-            android:paddingVertical="15dp"
+            style="@style/MenuButtonStyle"
             android:layout_weight="1"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:textAlignment="center"
+            android:layout_height="35dp"
             android:text="@string/speed"/>
     </LinearLayout>
     <Switch
         android:id="@+id/night_switch"
-        android:layout_marginTop="10dp"
+        style="@style/DayNightSwitchStyle"
+        android:layout_marginTop="5dp"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:paddingHorizontal="15dp"
+        android:layout_height="44dp"
+        android:paddingHorizontal="7dp"
         android:paddingVertical="2dp"
+        android:textSize="15sp"
         android:text="@string/night_mode" />
 </LinearLayout>

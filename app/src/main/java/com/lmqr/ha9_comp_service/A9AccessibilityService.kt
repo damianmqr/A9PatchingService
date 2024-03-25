@@ -4,11 +4,14 @@ import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.net.Uri
@@ -23,14 +26,17 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.widget.Button
 import androidx.preference.PreferenceManager
+import com.lmqr.ha9_comp_service.command_runners.CommandRunner
+import com.lmqr.ha9_comp_service.command_runners.FIFOCommandRunner
 import com.lmqr.ha9_comp_service.databinding.FloatingMenuLayoutBinding
 import kotlin.math.max
 import kotlin.math.min
 
 
 class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
-    private val rootCommandRunner = RootCommandRunner()
+    private lateinit var commandRunner: CommandRunner
     private lateinit var temperatureModeManager: TemperatureModeManager
     private lateinit var refreshModeManager: RefreshModeManager
     private lateinit var sharedPreferences: SharedPreferences
@@ -44,6 +50,9 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     temperatureModeManager.onScreenChange(true)
+                }
+                Intent.ACTION_USER_PRESENT -> {
+                    commandRunner.runCommands(arrayOf("setup"))
                 }
             }
         }
@@ -61,21 +70,23 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
 
     override fun onCreate() {
         super.onCreate()
+        commandRunner = FIFOCommandRunner(filesDir.absolutePath)
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
         refreshModeManager = RefreshModeManager(
             sharedPreferences,
-            rootCommandRunner
+            commandRunner
         )
         temperatureModeManager = TemperatureModeManager(
             TemperatureMode.White,
             getBrightnessFromSetting(),
-            rootCommandRunner,
+            commandRunner,
         )
 
         val filter = IntentFilter()
         filter.addAction(Intent.ACTION_SCREEN_ON)
         filter.addAction(Intent.ACTION_SCREEN_OFF)
+        filter.addAction(Intent.ACTION_USER_PRESENT)
         registerReceiver(receiver, filter)
 
         contentObserver = object : ContentObserver(handler) {
@@ -100,7 +111,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
         if(sharedPreferences.getBoolean("swap_clear_button", false))
             openFloatingMenu()
         else
-            rootCommandRunner.runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
+            commandRunner.runCommands(arrayOf("r"))
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -115,7 +126,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                         if (clickTime - lastClickTime < 350) {
                             handler.removeCallbacks(singlePressRunnable)
                             if(sharedPreferences.getBoolean("swap_clear_button", false))
-                                rootCommandRunner.runAsRoot(arrayOf("echo 1 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_force_clear"))
+                                commandRunner.runCommands(arrayOf("r"))
                             else
                                 openFloatingMenu()
                         }else{
@@ -188,7 +199,6 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                     updateButtons(refreshModeManager.currentMode)
                 }
             }?:run{
-                rootCommandRunner.runAsRoot(arrayOf("service call SurfaceFlinger 1008 i32 1"))
 
                 val wm = getSystemService(WINDOW_SERVICE) as WindowManager
                 val inflater = LayoutInflater.from(this)
@@ -261,17 +271,9 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
 
     override fun onDestroy() {
         contentObserver?.let { contentResolver.unregisterContentObserver(it) }
-        rootCommandRunner.runAsRoot(
-            arrayOf(
-                "chmod 644 /sys/class/leds/aw99703-bl-2/brightness",
-                "chmod 644 /sys/class/leds/aw99703-bl-1/brightness",
-                "echo 0 > /sys/class/leds/aw99703-bl-1/brightness",
-                "settings put system screen_brightness \$(settings get system screen_brightness)",
-            )
-        )
+        commandRunner.onDestroy()
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         unregisterReceiver(receiver)
-        rootCommandRunner.onDestroy()
         super.onDestroy()
     }
 
@@ -281,13 +283,16 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if(event?.eventType?.equals(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) == true) {
-            event.packageName?.toString()?.let { name ->
-                if(name != packageName) {
-                    refreshModeManager.onAppChange(name)
-                    menuBinding.updateButtons(refreshModeManager.currentMode)
-                }
-            }
+        event.letPackageNameClassName{ pkgName, clsName ->
+            val componentName = ComponentName(
+                pkgName,
+                clsName
+            )
+            try {
+                packageManager.getActivityInfo(componentName, 0)
+                refreshModeManager.onAppChange(pkgName)
+                menuBinding.updateButtons(refreshModeManager.currentMode)
+            } catch (_: PackageManager.NameNotFoundException) {}
         }
     }
 
@@ -302,17 +307,36 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
     }
 }
 
+fun AccessibilityEvent?.letPackageNameClassName(block: (String, String)->Unit) {
+    this?.run {
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+            this.className?.let { clsName ->
+                this.packageName?.let { pkgName -> block(pkgName.toString(), clsName.toString()) }
+            }
+    }
+}
+
 fun FloatingMenuLayoutBinding?.close() = this?.run{
     root.visibility = View.GONE
 }
 
 fun FloatingMenuLayoutBinding?.updateButtons(mode: RefreshMode) = this?.run{
-        listOf(button1, button2, button3, button4).forEach { it.setBackgroundResource(R.drawable.drawable_border_normal) }
+        listOf(button1, button2, button3, button4).forEach(Button::deselect)
         when (mode) {
             RefreshMode.CLEAR -> button1
             RefreshMode.BALANCED -> button2
             RefreshMode.SMOOTH -> button3
             RefreshMode.SPEED -> button4
             else -> null
-        }?.setBackgroundResource(R.drawable.drawable_border_pressed)
+        }?.select()
+}
+
+fun Button.deselect(){
+    setBackgroundResource(R.drawable.drawable_border_normal)
+    setTextColor(Color.BLACK)
+}
+
+fun Button.select(){
+    setBackgroundResource(R.drawable.drawable_border_pressed)
+    setTextColor(Color.WHITE)
 }

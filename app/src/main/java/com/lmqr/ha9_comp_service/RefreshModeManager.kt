@@ -1,6 +1,7 @@
 package com.lmqr.ha9_comp_service
 
 import android.content.SharedPreferences
+import com.lmqr.ha9_comp_service.command_runners.CommandRunner
 
 enum class RefreshMode(val mode: Int){
     CLEAR(0),
@@ -16,15 +17,12 @@ enum class RefreshMode(val mode: Int){
 
 class RefreshModeManager(
     private val sharedPreferences: SharedPreferences,
-    private val rootCommandRunner: RootCommandRunner,
+    private val commandRunner: CommandRunner,
 ) {
     var currentMode = RefreshMode.NONE
         private set(v) { field = v; applyMode() }
     private var currentClassifier = ""
-    fun onAppChange(packageName: String) = packageName.toClassifier().run{
-        if(this == ignoreClassifier)
-            return
-
+    fun onAppChange(packageName: String) = packageName.run{
         if(this != currentClassifier){
             currentClassifier = this
             val tempMode = RefreshMode.fromInt(
@@ -50,25 +48,12 @@ class RefreshModeManager(
     }
 
     private fun applyMode() = when(currentMode){
-        RefreshMode.CLEAR -> rootCommandRunner.runAsRoot(arrayOf("echo 515 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode"))
-        RefreshMode.BALANCED -> rootCommandRunner.runAsRoot(arrayOf("echo 513 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode"))
-        RefreshMode.SMOOTH -> rootCommandRunner.runAsRoot(arrayOf("echo 518 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode"))
-        RefreshMode.SPEED -> rootCommandRunner.runAsRoot(arrayOf("echo 521 > /sys/devices/platform/soc/soc\\:qcom,dsi-display-primary/epd_display_mode"))
+        RefreshMode.CLEAR -> commandRunner.runCommands(arrayOf("c"))
+        RefreshMode.BALANCED -> commandRunner.runCommands(arrayOf("b"))
+        RefreshMode.SMOOTH -> commandRunner.runCommands(arrayOf("s"))
+        RefreshMode.SPEED -> commandRunner.runCommands(arrayOf("p"))
         RefreshMode.NONE -> {}
     }
-
-    companion object{
-        const val systemClassifier = "android"
-        const val ignoreClassifier = "_ignore_"
-    }
-}
-
-private fun String.toClassifier(): String {
-    if(startsWith("com.android.systemui"))
-        return RefreshModeManager.ignoreClassifier
-    if(startsWith("com.android"))
-        return RefreshModeManager.systemClassifier
-    return this
 }
 
 private fun String.toSharedPreferencesKey(isPerAppEnabled: Boolean): String {
