@@ -15,6 +15,14 @@ class TemperatureModeManager(
     initialBrightness: Float,
     private var commandRunner: CommandRunner
 ) {
+    var isDisabled = false
+        set(value) {
+            if(value)
+                setMode(TemperatureMode.White)
+            field=value
+            if(!value)
+                updateMode()
+        }
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -23,24 +31,35 @@ class TemperatureModeManager(
     var brightness: Float = initialBrightness
         set(v) { field = v; setBrightness(); }
 
-    fun setMode(mode: TemperatureMode){
-        if(currentMode != mode) {
-            currentMode = mode
-            when(mode){
-                TemperatureMode.Night -> {
-                    commandRunner.runCommands(arrayOf(
+    private fun updateMode(){
+        when (currentMode) {
+            TemperatureMode.Night -> {
+                commandRunner.runCommands(
+                    arrayOf(
                         "sb1${(brightness * maxBrightness).toInt()}",
                         "sb20",
                         "bl",
-                    ))
-                }
-                TemperatureMode.White, TemperatureMode.None -> {
-                    commandRunner.runCommands(arrayOf(
+                    )
+                )
+            }
+
+            TemperatureMode.White, TemperatureMode.None -> {
+                commandRunner.runCommands(
+                    arrayOf(
                         "un",
                         "sb2${(brightness * maxBrightness).toInt()}",
                         "sb10",
-                    ))
-                }
+                    )
+                )
+            }
+        }
+    }
+
+    fun setMode(mode: TemperatureMode){
+        if(currentMode != mode) {
+            currentMode = mode
+            if(!isDisabled) {
+                updateMode()
             }
         }
     }

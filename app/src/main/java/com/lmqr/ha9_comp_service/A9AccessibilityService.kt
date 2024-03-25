@@ -78,7 +78,10 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
             commandRunner
         )
         temperatureModeManager = TemperatureModeManager(
-            TemperatureMode.White,
+            if (sharedPreferences.getBoolean("night_mode", false))
+                TemperatureMode.Night
+            else
+                TemperatureMode.White,
             getBrightnessFromSetting(),
             commandRunner,
         )
@@ -248,11 +251,12 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                         startActivity(settingsIntent)
                     }
                     nightSwitch.setOnCheckedChangeListener { _, checked ->
-                        if (checked)
-                            temperatureModeManager.setMode(TemperatureMode.Night)
-                        else
-                            temperatureModeManager.setMode(TemperatureMode.White)
+                        val currentMode = sharedPreferences.getBoolean("night_mode", false)
+                        if(currentMode != checked) {
+                            sharedPreferences.edit().putBoolean("night_mode", checked).apply()
+                        }
                     }
+                    nightSwitch.isChecked = sharedPreferences.getBoolean("night_mode", false)
 
                     nightSwitch.visibility =
                         if(sharedPreferences.getBoolean("disable_nightmode", false))
@@ -299,7 +303,21 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when(key){
             "disable_nightmode" -> {
-                if(sharedPreferences?.getBoolean("disable_nightmode", false) == true){
+                temperatureModeManager.isDisabled =
+                    (sharedPreferences?.getBoolean("disable_nightmode", false) == true)
+                if (!temperatureModeManager.isDisabled) {
+                    if (sharedPreferences?.getBoolean("night_mode", false) == true)
+                        temperatureModeManager.setMode(TemperatureMode.Night)
+                    else
+                        temperatureModeManager.setMode(TemperatureMode.White)
+                }
+            }
+            "night_mode" -> {
+                if(sharedPreferences?.getBoolean("night_mode", false) == true){
+                    menuBinding?.nightSwitch?.isChecked = true
+                    temperatureModeManager.setMode(TemperatureMode.Night)
+                }else{
+                    menuBinding?.nightSwitch?.isChecked = false
                     temperatureModeManager.setMode(TemperatureMode.White)
                 }
             }
