@@ -15,7 +15,7 @@ static const char* kTAG = "a9EinkService";
 #define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, kTAG, __VA_ARGS__))
 
 #define SOCKET_NAME "0a9_eink_socket"
-#define BUFFER_SIZE 64
+#define BUFFER_SIZE 256
 
 int valid_number(const char *s) {
     if(strlen(s) > 4 || strlen(s) == 0)
@@ -65,7 +65,8 @@ void writeToEpdDisplayMode(const char* value) {
     close(fd);
 }
 
-void writeToBrightness(const char* ledPath, const char* brightness) {
+void setYellowBrightness(const char* brightness) {
+    const char* ledPath = "/sys/class/leds/aw99703-bl-1/brightness";
     if(!valid_number(brightness)){
         LOGE("Error writing to %s: Invalid Number\n", ledPath);
         return;
@@ -81,12 +82,21 @@ void writeToBrightness(const char* ledPath, const char* brightness) {
     close(fd);
 }
 
-void setYellowBrightness(const char* brightness) {
-    writeToBrightness("/sys/class/leds/aw99703-bl-1/brightness", brightness);
-}
-
 void setWhiteBrightness(const char* brightness) {
-    writeToBrightness("/sys/class/leds/aw99703-bl-2/brightness", brightness);
+    const char* ledPath = "/sys/class/leds/aw99703-bl-2/brightness";
+    if(!valid_number(brightness)){
+        LOGE("Error writing to %s: Invalid Number\n", ledPath);
+        return;
+    }
+    int fd = open(ledPath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
+        return;
+    }
+    if (write(fd, brightness, strlen(brightness)) == -1) {
+        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
+    }
+    close(fd);
 }
 
 void blockYellowBrightness() {
@@ -162,7 +172,7 @@ _Noreturn void setupServer() {
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_sockfd, 10) < 0) {
+    if (listen(server_sockfd, 50) < 0) {
         LOGE("Socket listen failed: %s", strerror(errno));
         close(server_sockfd);
         exit(EXIT_FAILURE);
@@ -182,7 +192,11 @@ _Noreturn void setupServer() {
             ssize_t num_read = read(client_sockfd, buffer, BUFFER_SIZE - 1);
             if (num_read > 0) {
                 buffer[num_read] = '\0';
-                processCommand(buffer);
+                char* cmd = strtok(buffer, "\n");
+                while (cmd != NULL) {
+                    processCommand(cmd);
+                    cmd = strtok(NULL, "\n");
+                }
             } else if (num_read == 0) {
                 LOGI("Client disconnected");
                 break;

@@ -28,7 +28,7 @@ class UnixDomainSocketClient(private val socketName: String) {
             connect()
         }
         try {
-            outputStream?.write(command.toByteArray())
+            outputStream?.write((command+"\n").toByteArray())
             outputStream?.flush()
             println("Command sent: $command")
         } catch (e: IOException) {
@@ -36,7 +36,7 @@ class UnixDomainSocketClient(private val socketName: String) {
             disconnect()
             connect()
             try {
-                outputStream?.write(command.toByteArray())
+                outputStream?.write((command+"\n").toByteArray())
                 outputStream?.flush()
             }catch (e: IOException){
                 e.printStackTrace()
