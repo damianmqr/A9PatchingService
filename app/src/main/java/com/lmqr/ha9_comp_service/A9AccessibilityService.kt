@@ -29,7 +29,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.command_runners.CommandRunner
-import com.lmqr.ha9_comp_service.command_runners.RootCommandRunner
+import com.lmqr.ha9_comp_service.command_runners.UnixSocketCommandRunner
 import com.lmqr.ha9_comp_service.databinding.FloatingMenuLayoutBinding
 import kotlin.math.max
 import kotlin.math.min
@@ -50,6 +50,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     temperatureModeManager.onScreenChange(true)
+                    commandRunner.runCommands(arrayOf("setup"))
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     commandRunner.runCommands(arrayOf("setup"))
@@ -70,7 +71,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
 
     override fun onCreate() {
         super.onCreate()
-        commandRunner = RootCommandRunner()// FIFOCommandRunner(filesDir.absolutePath)
+        commandRunner = UnixSocketCommandRunner()//RootCommandRunner()// FIFOCommandRunner(filesDir.absolutePath)
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
         refreshModeManager = RefreshModeManager(

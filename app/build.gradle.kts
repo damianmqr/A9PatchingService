@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "com.lmqr.ha9_comp_service"
-        minSdk = 31
-        targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        minSdk = 27
+        targetSdk = 27
+        versionCode = 3
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,6 +37,9 @@ android {
     }
     kotlinOptions {
         jvmTarget = "1.8"
+    }
+    lint {
+        disable.add("ExpiredTargetSdkVersion")
     }
 }
 
