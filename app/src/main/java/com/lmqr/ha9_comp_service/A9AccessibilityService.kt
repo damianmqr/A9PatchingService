@@ -50,6 +50,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     temperatureModeManager.onScreenChange(true)
+                    commandRunner.runCommands(arrayOf("setup"))
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     commandRunner.runCommands(arrayOf("setup"))
