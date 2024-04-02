@@ -24,17 +24,32 @@ mount -o loop,rw s-ab-raw.img d
 	echo "ro.sf.lcd_density=360" >> build.prop
 
 	if grep -q "^ro.product.model=" "build.prop"; then
-      sed -i "s/^ro.product.model=.*/ro.product.model=A9/" build.prop
-  else
-      echo "ro.product.model=A9" >> build.prop
-  fi
+		sed -i "s/^ro.product.model=.*/ro.product.model=A9/" build.prop
+	else
+		echo "ro.product.model=A9" >> build.prop
+	fi
 
-  if grep -q "^ro.product.brand=" "build.prop"; then
-      sed -i "s/^ro.product.brand=.*/ro.product.brand=hisense/" build.prop
-  else
-      echo "ro.product.brand=hisense" >> build.prop
-  fi
+	if grep -q "^ro.product.brand=" "build.prop"; then
+		sed -i "s/^ro.product.brand=.*/ro.product.brand=hisense/" build.prop
+	else
+		echo "ro.product.brand=hisense" >> build.prop
+	fi
 
+
+  TREBLE_APK="priv-app/TrebleApp/TrebleApp.apk"
+	if [ -f "$TREBLE_APK" ]; then
+	      echo "TrebleApp.apk found. Replacing to disable hw overlays."
+        cp -f "../../TrebleApp.apk" "$TREBLE_APK"
+
+        if [ $? -eq 0 ]; then
+            echo "Replaced successfully."
+            chmod 644 "$TREBLE_APK"
+            chown root:root "$TREBLE_APK"
+            setfattr -n security.selinux -v u:object_r:system_file:s0 "$TREBLE_APK"
+        else
+            echo "WARNING: Couldn't replace TrebleApp"
+        fi
+  fi
 
 	cp ../../a9_eink_server bin/
 	chmod +x bin/a9_eink_server
@@ -47,6 +62,7 @@ mount -o loop,rw s-ab-raw.img d
 	setfattr -n security.selinux -v u:object_r:system_file:s0 app/a9service.apk
 
 	sed -i '1s|^|service a9_eink_server /system/bin/a9_eink_server\n    disabled\n\n|' etc/init/vndk.rc
+	sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ exec_background u:r:phhsu_daemon:s0 root -- /system/bin/service call SurfaceFlinger 1008 i32 1' etc/init/vndk.rc
 	sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ start a9_eink_server' etc/init/vndk.rc
 	sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ exec_background u:r:phhsu_daemon:s0 root -- /system/bin/settings put secure enabled_accessibility_services com.lmqr.ha9_comp_service/.A9AccessibilityService' etc/init/vndk.rc
 	sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ exec_background u:r:phhsu_daemon:s0 root -- /system/bin/appops set com.lmqr.ha9_comp_service SYSTEM_ALERT_WINDOW allow' etc/init/vndk.rc

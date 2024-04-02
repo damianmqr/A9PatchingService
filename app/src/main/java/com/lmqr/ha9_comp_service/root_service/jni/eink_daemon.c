@@ -27,13 +27,6 @@ int valid_number(const char *s) {
     return 1;
 }
 
-void disableHWOverlays() {
-    int status = system("service call SurfaceFlinger 1008 i32 1 > /dev/null");
-    if (status == -1) {
-        LOGE("Failed to disable HW overlays");
-    }
-}
-
 void epdForceClear() {
     const char* filePath = "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_force_clear";
     int fd = open(filePath, O_WRONLY);
@@ -117,7 +110,7 @@ void unblockWhiteBrightness() {
 
 void processCommand(const char* command) {
     if (strcmp(command, "setup") == 0) {
-        disableHWOverlays();
+        ;
     } else if (strcmp(command, "bl") == 0) {
         setWhiteBrightness("0");
         blockWhiteBrightness();
