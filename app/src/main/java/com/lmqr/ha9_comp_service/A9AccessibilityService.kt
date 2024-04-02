@@ -50,10 +50,6 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     temperatureModeManager.onScreenChange(true)
-                    commandRunner.runCommands(arrayOf("setup"))
-                }
-                Intent.ACTION_USER_PRESENT -> {
-                    commandRunner.runCommands(arrayOf("setup"))
                 }
             }
         }
@@ -90,7 +86,6 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
         val filter = IntentFilter()
         filter.addAction(Intent.ACTION_SCREEN_ON)
         filter.addAction(Intent.ACTION_SCREEN_OFF)
-        filter.addAction(Intent.ACTION_USER_PRESENT)
         registerReceiver(receiver, filter)
 
         contentObserver = object : ContentObserver(handler) {
@@ -115,7 +110,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
         if(sharedPreferences.getBoolean("swap_clear_button", false))
             openFloatingMenu()
         else
-            commandRunner.runCommands(arrayOf("r"))
+            commandRunner.runCommands(arrayOf("r", "setup"))
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -130,7 +125,7 @@ class A9AccessibilityService : AccessibilityService(), SharedPreferences.OnShare
                         if (clickTime - lastClickTime < 350) {
                             handler.removeCallbacks(singlePressRunnable)
                             if(sharedPreferences.getBoolean("swap_clear_button", false))
-                                commandRunner.runCommands(arrayOf("r"))
+                                commandRunner.runCommands(arrayOf("r", "setup"))
                             else
                                 openFloatingMenu()
                         }else{
