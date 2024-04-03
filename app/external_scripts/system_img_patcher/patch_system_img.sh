@@ -51,6 +51,23 @@ mount -o loop,rw s-ab-raw.img d
         fi
   fi
 
+  OVERLAY_DIRECTORY="product/overlay/"
+  HISENSE_OVERLAY="treble-overlay-Hisense-HLTE556N.apk"
+  TARGET_FILE_OVERLAY="${OVERLAY_DIRECTORY}${HISENSE_OVERLAY}"
+
+  if [ -d "${OVERLAY_DIRECTORY}" ]; then
+      if [ ! -f "${TARGET_FILE_OVERLAY}" ]; then
+          cp "../../${HISENSE_OVERLAY}" "${TARGET_FILE_OVERLAY}"
+
+          if [ -f "${TARGET_FILE_OVERLAY}" ]; then
+
+              chmod 644 "${TARGET_FILE_OVERLAY}"
+              chown root:root "${TARGET_FILE_OVERLAY}"
+              setfattr -n security.selinux -v u:object_r:system_file:s0 "${TARGET_FILE_OVERLAY}"
+          fi
+      fi
+  fi
+
 	cp ../../a9_eink_server bin/
 	chmod +x bin/a9_eink_server
 	chown root:2000 bin/a9_eink_server
