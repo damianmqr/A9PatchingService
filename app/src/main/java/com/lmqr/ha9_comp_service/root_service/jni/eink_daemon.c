@@ -9,18 +9,19 @@
 #include <errno.h>
 #include <android/log.h>
 #include <ctype.h>
+#include <sys/xattr.h>
 
 static const char* kTAG = "a9EinkService";
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, kTAG, __VA_ARGS__))
 #define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, kTAG, __VA_ARGS__))
 
 #define SOCKET_NAME "0a9_eink_socket"
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 512
 
 int valid_number(const char *s) {
     if(strlen(s) > 4 || strlen(s) == 0)
         return 0;
-    
+
     while (*s)
         if (isdigit(*s++) == 0) return 0;
 
@@ -40,13 +41,26 @@ void epdForceClear() {
     close(fd);
 }
 
+void epdCommitBitmap() {
+    const char* filePath = "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_commit_bitmap";
+    int fd = open(filePath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", filePath, strerror(errno));
+        return;
+    }
+    if (write(fd, "1", 1) == -1) {
+        LOGE("Error writing to %s: %s\n", filePath, strerror(errno));
+    }
+    close(fd);
+}
+
 void writeToEpdDisplayMode(const char* value) {
     const char* filePath = "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_display_mode";
     if(!valid_number(value)){
         LOGE("Error writing to %s: Invalid Number\n", filePath);
         return;
     }
-    
+
     int fd = open(filePath, O_WRONLY);
     if (fd == -1) {
         LOGE("Error writing to %s: %s\n", filePath, strerror(errno));
@@ -92,6 +106,150 @@ void setWhiteBrightness(const char* brightness) {
     close(fd);
 }
 
+void setYellowBrightnessAlt(const char* brightness) {
+    const char* ledPath = "/sys/class/backlight/aw99703-bl-1/brightness";
+    if(!valid_number(brightness)){
+        LOGE("Error writing to %s: Invalid Number\n", ledPath);
+        return;
+    }
+    int fd = open(ledPath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
+        return;
+    }
+    if (write(fd, brightness, strlen(brightness)) == -1) {
+        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
+    }
+    close(fd);
+}
+
+void setWhiteBrightnessAlt(const char* brightness) {
+    const char* ledPath = "/sys/class/backlight/aw99703-bl-2/brightness";
+    if(!valid_number(brightness)){
+        LOGE("Error writing to %s: Invalid Number\n", ledPath);
+        return;
+    }
+    int fd = open(ledPath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
+        return;
+    }
+    if (write(fd, brightness, strlen(brightness)) == -1) {
+        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
+    }
+    close(fd);
+}
+
+void setWhiteThreshold(const char* brightness) {
+    const char* whiteThresholdPath ="/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_white_threshold";
+    if(!valid_number(brightness)){
+        LOGE("Error writing to %s: Invalid Number\n", whiteThresholdPath);
+        return;
+    }
+    int fd = open(whiteThresholdPath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", whiteThresholdPath, strerror(errno));
+        return;
+    }
+    if (write(fd, brightness, strlen(brightness)) == -1) {
+        LOGE("Error writing to %s: %s\n", whiteThresholdPath, strerror(errno));
+    }
+    close(fd);
+}
+
+void setBlackThreshold(const char* brightness) {
+    const char* blackThresholdPath = "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_black_threshold";
+    if(!valid_number(brightness)){
+        LOGE("Error writing to %s: Invalid Number\n", blackThresholdPath);
+        return;
+    }
+    int fd = open(blackThresholdPath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", blackThresholdPath, strerror(errno));
+        return;
+    }
+    if (write(fd, brightness, strlen(brightness)) == -1) {
+        LOGE("Error writing to %s: %s\n", blackThresholdPath, strerror(errno));
+    }
+    close(fd);
+}
+
+void setContrast(const char* brightness) {
+    const char* contrastPath = "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_contrast";
+    if(!valid_number(brightness)){
+        LOGE("Error writing to %s: Invalid Number\n", contrastPath);
+        return;
+    }
+    int fd = open(contrastPath, O_WRONLY);
+    if (fd == -1) {
+        LOGE("Error writing to %s: %s\n", contrastPath, strerror(errno));
+        return;
+    }
+    if (write(fd, brightness, strlen(brightness)) == -1) {
+        LOGE("Error writing to %s: %s\n", contrastPath, strerror(errno));
+    }
+    close(fd);
+}
+
+void setShutoffImage(const char *source_path) {
+    const char* TARGET_FILE = "/kdebuginfo/edpd/bitmap_low.raw";
+    struct stat statbuf;
+    int source_fd, target_fd;
+    char buffer[4096];
+    ssize_t bytes_read, bytes_written;
+
+    if (stat(source_path, &statbuf) != 0) {
+        LOGE("Failed to get source file stats");
+        return;
+    }
+
+    if (statbuf.st_size != 2715904) {
+        LOGE("Shutoff screen size does not match the expected size");
+        return;
+    }
+
+    source_fd = open(source_path, O_RDONLY);
+    if (source_fd < 0) {
+        LOGE("Failed to open source file");
+        return;
+    }
+
+    target_fd = open(TARGET_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (target_fd < 0) {
+        LOGE("Failed to open target file");
+        close(source_fd);
+        return;
+    }
+
+    while ((bytes_read = read(source_fd, buffer, sizeof(buffer))) > 0) {
+        bytes_written = write(target_fd, buffer, bytes_read);
+        if (bytes_written != bytes_read) {
+            LOGE("Failed to write all bytes to target file");
+            close(source_fd);
+            close(target_fd);
+            return;
+        }
+    }
+
+    close(source_fd);
+    close(target_fd);
+
+    if (chown(TARGET_FILE, 1000, 1000) != 0) {
+        perror("Failed to change file owner");
+        return;
+    }
+
+    if (chmod(TARGET_FILE, S_IRUSR | S_IWUSR) != 0) {
+        perror("Failed to change file permissions");
+        return;
+    }
+
+    if (setxattr(TARGET_FILE, "security.selinux", "u:object_r:kdebuginfo_data_file:s0", 31, 0) != 0) {
+        perror("Failed to set SELinux context");
+        return;
+    }
+}
+
 void blockYellowBrightness() {
     chmod("/sys/class/leds/aw99703-bl-1/brightness", 0444);
 }
@@ -111,6 +269,8 @@ void unblockWhiteBrightness() {
 void processCommand(const char* command) {
     if (strcmp(command, "setup") == 0) {
         ;
+    } else if (strcmp(command, "cm") == 0) {
+        epdCommitBitmap();
     } else if (strcmp(command, "bl") == 0) {
         setWhiteBrightness("0");
         blockWhiteBrightness();
@@ -137,6 +297,23 @@ void processCommand(const char* command) {
     } else if (strncmp(command, "sb2", 3) == 0) {
         if(valid_number(command+3))
             setWhiteBrightness(command+3);
+    }  else if (strncmp(command, "sa1", 3) == 0) {
+        if(valid_number(command+3))
+            setYellowBrightnessAlt(command+3);
+    } else if (strncmp(command, "sa2", 3) == 0) {
+        if(valid_number(command+3))
+            setWhiteBrightnessAlt(command+3);
+    } else if (strncmp(command, "stw", 3) == 0) {
+        if(valid_number(command+3))
+            setWhiteThreshold(command+3);
+    } else if (strncmp(command, "stb", 3) == 0) {
+        if(valid_number(command+3))
+            setBlackThreshold(command+3);
+    } else if (strncmp(command, "sco", 3) == 0) {
+        if(valid_number(command+3))
+            setContrast(command+3);
+    } else if (strncmp(command, "sso", 3) == 0) {
+        setShutoffImage(command+3);
     } else {
         LOGE("Unknown command: %s", command);
     }
