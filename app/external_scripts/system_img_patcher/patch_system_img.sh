@@ -21,19 +21,30 @@ mount -o loop,rw s-ab-raw.img d
 (
 	cd d/system
 
-	echo "ro.sf.lcd_density=360" >> build.prop
+  declare -A properties=(
+    [ro.system.build.date]="Wed Dec 28 18:55:14 CST 2022"
+    [ro.system.build.date.utc]="1672224914"
+    [ro.system.build.fingerprint]="Crosscall/HLTE556N/HLTE556N:11/RKQ1.210107.001/L2037.6.01.01:user/release-keys"
+    [ro.system.build.id]="RKQ1.210107.001"
+    [ro.system.build.tags]="release-keys"
+    [ro.system.build.type]="user"
+    [ro.product.system.brand]="Crosscall"
+    [ro.product.system.device]="qssi"
+    [ro.product.system.manufacturer]="QUALCOMM"
+    [ro.product.system.model]="qssi system image for arm64"
+    [ro.product.system.name]="HLTE556N"
+    [ro.product.system.device]="HLTE556N"
+    [ro.sf.lcd_density]="360"
+  )
 
-	if grep -q "^ro.product.model=" "build.prop"; then
-		sed -i "s/^ro.product.model=.*/ro.product.model=A9/" build.prop
-	else
-		echo "ro.product.model=A9" >> build.prop
-	fi
-
-	if grep -q "^ro.product.brand=" "build.prop"; then
-		sed -i "s/^ro.product.brand=.*/ro.product.brand=hisense/" build.prop
-	else
-		echo "ro.product.brand=hisense" >> build.prop
-	fi
+  for prop in "${!properties[@]}"; do
+    value=${properties[$prop]}
+    if grep -q "^$prop=" "build.prop"; then
+      sed -i "s|^$prop=.*|$prop=$value|" "build.prop"
+    else
+      echo "$prop=$value" >> "build.prop"
+    fi
+  done
 
 
   TREBLE_APK="priv-app/TrebleApp/TrebleApp.apk"
