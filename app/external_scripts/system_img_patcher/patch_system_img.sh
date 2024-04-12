@@ -22,18 +22,12 @@ mount -o loop,rw s-ab-raw.img d
 	cd d/system
 
   declare -A properties=(
-    [ro.system.build.date]="Wed Dec 28 18:55:14 CST 2022"
-    [ro.system.build.date.utc]="1672224914"
-    [ro.system.build.fingerprint]="Crosscall/HLTE556N/HLTE556N:11/RKQ1.210107.001/L2037.6.01.01:user/release-keys"
-    [ro.system.build.id]="RKQ1.210107.001"
-    [ro.system.build.tags]="release-keys"
-    [ro.system.build.type]="user"
-    [ro.product.system.brand]="Crosscall"
-    [ro.product.system.device]="qssi"
-    [ro.product.system.manufacturer]="QUALCOMM"
-    [ro.product.system.model]="qssi system image for arm64"
-    [ro.product.system.name]="HLTE556N"
-    [ro.product.system.device]="HLTE556N"
+    [ro.product.brand]="Crosscall"
+    [ro.product.device]="qssi"
+    [ro.product.manufacturer]="QUALCOMM"
+    [ro.product.model]="HLTE556N"
+    [ro.product.name]="HLTE556N"
+    [ro.product.device]="HLTE556N"
     [ro.sf.lcd_density]="360"
   )
 

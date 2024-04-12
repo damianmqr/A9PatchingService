@@ -18,9 +18,9 @@ class FIFOCommandRunner(
     private var ostream: FileOutputStream? = null
 
     override fun runCommands(cmds: Array<String>) {
-        coroutinesScope.launch{
+        coroutinesScope.launch {
             try {
-                if(ostream == null)
+                if (ostream == null)
                     ostream = FileOutputStream(fifo)
 
                 ostream?.run {
@@ -38,14 +38,14 @@ class FIFOCommandRunner(
                             write((tmpCmd + "\n").toByteArray())
                         flush()
                     }
-                }catch (e: IOException){
+                } catch (e: IOException) {
                     e.printStackTrace()
                 }
             }
         }
     }
 
-    override fun onDestroy(){
+    override fun onDestroy() {
         job.complete()
         ostream?.close()
     }

@@ -1,4 +1,5 @@
 package com.lmqr.ha9_comp_service.command_runners
+
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import java.io.IOException
@@ -23,22 +24,21 @@ class UnixDomainSocketClient(private val socketName: String) {
     }
 
     fun sendCommand(command: String) {
-        if(socket?.isConnected != true) {
+        if (socket?.isConnected != true) {
             disconnect()
             connect()
         }
         try {
-            outputStream?.write((command+"\n").toByteArray())
+            outputStream?.write((command + "\n").toByteArray())
             outputStream?.flush()
-            println("Command sent: $command")
         } catch (e: IOException) {
             e.printStackTrace()
             disconnect()
             connect()
             try {
-                outputStream?.write((command+"\n").toByteArray())
+                outputStream?.write((command + "\n").toByteArray())
                 outputStream?.flush()
-            }catch (e: IOException){
+            } catch (e: IOException) {
                 e.printStackTrace()
             }
         }
@@ -58,16 +58,16 @@ class UnixDomainSocketClient(private val socketName: String) {
     }
 }
 
-class UnixSocketCommandRunner: CommandRunner {
-    var unixDomainSocketClient: UnixDomainSocketClient? = null
+class UnixSocketCommandRunner : CommandRunner {
+    private var unixDomainSocketClient: UnixDomainSocketClient? = null
     override fun runCommands(cmds: Array<String>) {
-        if(unixDomainSocketClient == null)
+        if (unixDomainSocketClient == null)
             unixDomainSocketClient = UnixDomainSocketClient("a9_eink_socket").apply {
                 connect()
             }
 
-        unixDomainSocketClient?.run{
-            for(cmd in cmds)
+        unixDomainSocketClient?.run {
+            for (cmd in cmds)
                 sendCommand(cmd)
         }
     }
