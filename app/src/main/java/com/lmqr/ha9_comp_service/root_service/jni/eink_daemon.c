@@ -191,65 +191,6 @@ void setContrast(const char* brightness) {
     close(fd);
 }
 
-void setShutoffImage(const char *source_path) {
-    const char* TARGET_FILE = "/kdebuginfo/edpd/bitmap_low.raw";
-    struct stat statbuf;
-    int source_fd, target_fd;
-    char buffer[4096];
-    ssize_t bytes_read, bytes_written;
-
-    if (stat(source_path, &statbuf) != 0) {
-        LOGE("Failed to get source file stats");
-        return;
-    }
-
-    if (statbuf.st_size != 2715904) {
-        LOGE("Shutoff screen size does not match the expected size");
-        return;
-    }
-
-    source_fd = open(source_path, O_RDONLY);
-    if (source_fd < 0) {
-        LOGE("Failed to open source file");
-        return;
-    }
-
-    target_fd = open(TARGET_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (target_fd < 0) {
-        LOGE("Failed to open target file");
-        close(source_fd);
-        return;
-    }
-
-    while ((bytes_read = read(source_fd, buffer, sizeof(buffer))) > 0) {
-        bytes_written = write(target_fd, buffer, bytes_read);
-        if (bytes_written != bytes_read) {
-            LOGE("Failed to write all bytes to target file");
-            close(source_fd);
-            close(target_fd);
-            return;
-        }
-    }
-
-    close(source_fd);
-    close(target_fd);
-
-    if (chown(TARGET_FILE, 1000, 1000) != 0) {
-        perror("Failed to change file owner");
-        return;
-    }
-
-    if (chmod(TARGET_FILE, S_IRUSR | S_IWUSR) != 0) {
-        perror("Failed to change file permissions");
-        return;
-    }
-
-    if (setxattr(TARGET_FILE, "security.selinux", "u:object_r:kdebuginfo_data_file:s0", 31, 0) != 0) {
-        perror("Failed to set SELinux context");
-        return;
-    }
-}
-
 void blockYellowBrightness() {
     chmod("/sys/class/leds/aw99703-bl-1/brightness", 0444);
 }
@@ -312,8 +253,6 @@ void processCommand(const char* command) {
     } else if (strncmp(command, "sco", 3) == 0) {
         if(valid_number(command+3))
             setContrast(command+3);
-    } else if (strncmp(command, "sso", 3) == 0) {
-        setShutoffImage(command+3);
     } else {
         LOGE("Unknown command: %s", command);
     }

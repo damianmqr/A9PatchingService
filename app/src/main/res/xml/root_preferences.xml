@@ -37,4 +37,35 @@
             app:defaultValue="2" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="Experimental">
+        <SwitchPreferenceCompat
+            app:key="temperature_slider"
+            app:summary="Enable slider in place of toggle"
+            app:title="Enable Temperature Slider" />
+
+        <SwitchPreferenceCompat
+            app:key="overlay_aod"
+            app:summary="Draw a custom AOD on stock"
+            app:title="Overlay AOD" />
+
+        <SwitchPreferenceCompat
+            app:dependency="overlay_aod"
+            app:key="overlay_chess"
+            app:summary="Enable chess replays on AOD"
+            app:title="Chess AOD" />
+
+        <Preference
+            app:key="grant_dnd_perms"
+            app:title="Grant AOD Permissions"
+            app:summary="Grant do-not-disturb permissions for AOD"/>
+
+        <Preference
+            app:key="select_aod_bg"
+            app:title="Select Background for AOD" />
+
+        <Preference
+            app:key="remove_aod_bg"
+            app:title="Remove Background for AOD" />
+    </PreferenceCategory>
+
 </PreferenceScreen>
