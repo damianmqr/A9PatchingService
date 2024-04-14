@@ -77,9 +77,19 @@ class SettingsActivity : AppCompatActivity() {
             (findPreference("grant_dnd_perms") as Preference?)?.onPreferenceClickListener =
                 Preference.OnPreferenceClickListener {
                     val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     requireContext().startActivity(intent)
                     true
                 }
+
+            (findPreference("grant_notif_perms") as Preference?)?.onPreferenceClickListener =
+                Preference.OnPreferenceClickListener {
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    requireContext().startActivity(intent)
+                    true
+                }
+
 
             (findPreference("select_aod_bg") as Preference?)?.onPreferenceClickListener =
                 Preference.OnPreferenceClickListener {

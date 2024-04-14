@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFlags="flagRequestFilterKeyEvents|flagIncludeNotImportantViews"
-    android:accessibilityFeedbackType="feedbackAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
     android:canRequestFilterKeyEvents="true"
     android:notificationTimeout="100"
     android:settingsActivity="com.example.android.accessibility.ServiceSettingsActivity" />

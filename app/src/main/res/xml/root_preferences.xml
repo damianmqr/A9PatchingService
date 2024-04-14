@@ -55,8 +55,13 @@
             app:title="Chess AOD" />
 
         <Preference
+            app:key="grant_notif_perms"
+            app:title="Grant Notification Permissions"
+            app:summary="Grant notification permissions for AOD"/>
+
+        <Preference
             app:key="grant_dnd_perms"
-            app:title="Grant AOD Permissions"
+            app:title="Grant DND Permissions"
             app:summary="Grant do-not-disturb permissions for AOD"/>
 
         <Preference

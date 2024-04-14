@@ -20,6 +20,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -31,6 +32,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.SeekBar.OnSeekBarChangeListener
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.command_runners.CommandRunner
 import com.lmqr.ha9_comp_service.command_runners.Commands
@@ -97,6 +99,30 @@ class A9AccessibilityService : AccessibilityService(),
         }
     }
 
+    private val notificationIcons = HashMap<String, StatusBarNotification>()
+
+
+    private val notificationReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            try {
+                val sbn =
+                    intent.getParcelableExtra<StatusBarNotification>(NotificationListener.EXTRA_STATUS_BAR_NOTIFICATION)
+                if (sbn != null) {
+                    if (NotificationListener.ACTION_NOTIFICATION_POSTED == intent.action) {
+                        notificationIcons[sbn.packageName+":"+sbn.id] = sbn
+                        aodLayoutBinding?.notificationIconView?.updateNotifications(notificationIcons.values.toList())
+
+                    } else if (NotificationListener.ACTION_NOTIFICATION_REMOVED == intent.action) {
+                        notificationIcons.remove(sbn.packageName+":"+sbn.id)
+                        aodLayoutBinding?.notificationIconView?.updateNotifications(notificationIcons.values.toList())
+                    }
+                }
+            }catch (ex: Exception){
+                ex.printStackTrace()
+            }
+        }
+    }
+
     private val handler = Handler(Looper.getMainLooper())
 
     fun getBrightnessFromSetting() = min(
@@ -128,10 +154,10 @@ class A9AccessibilityService : AccessibilityService(),
             commandRunner,
         )
 
-        val filter = IntentFilter()
-        filter.addAction(Intent.ACTION_SCREEN_ON)
-        filter.addAction(Intent.ACTION_SCREEN_OFF)
-        registerReceiver(receiver, filter)
+        val filterScreen = IntentFilter()
+        filterScreen.addAction(Intent.ACTION_SCREEN_ON)
+        filterScreen.addAction(Intent.ACTION_SCREEN_OFF)
+        registerReceiver(receiver, filterScreen)
 
         contentObserver = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean) {
@@ -143,6 +169,11 @@ class A9AccessibilityService : AccessibilityService(),
             Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS),
             true, contentObserver as ContentObserver
         )
+
+        val filterNotifications = IntentFilter()
+        filterNotifications.addAction(NotificationListener.ACTION_NOTIFICATION_POSTED)
+        filterNotifications.addAction(NotificationListener.ACTION_NOTIFICATION_REMOVED)
+        LocalBroadcastManager.getInstance(baseContext).registerReceiver(notificationReceiver, filterNotifications)
     }
 
     override fun onInterrupt() {
@@ -433,6 +464,8 @@ class A9AccessibilityService : AccessibilityService(),
 
                 updateChessboardVisibility()
 
+                notificationIconView.updateNotifications(notificationIcons.values.toList())
+
                 loadBackgroundImage()
             }
         }
@@ -447,6 +480,7 @@ class A9AccessibilityService : AccessibilityService(),
         commandRunner.onDestroy()
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         unregisterReceiver(receiver)
+        LocalBroadcastManager.getInstance(baseContext).unregisterReceiver(notificationReceiver)
         super.onDestroy()
     }
 

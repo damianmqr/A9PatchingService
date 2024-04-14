@@ -19,6 +19,12 @@
         android:format12Hour="E, dd LLL"
         android:format24Hour="E, dd LLL"
         android:textSize="18sp"/>
+    <com.lmqr.ha9_comp_service.NotificationIconView
+        android:id="@+id/notification_icon_view"
+        android:layout_marginHorizontal="30dp"
+        android:layout_marginTop="5dp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp"/>
     <LinearLayout
         android:id="@+id/chessboard_white_panel"
         android:layout_marginTop="25dp"
