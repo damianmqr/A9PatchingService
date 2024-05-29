@@ -1,9 +1,13 @@
-package com.lmqr.ha9_comp_service
+package com.lmqr.ha9_comp_service.aod_views.chess_view
 
-class ChessboardState {
-    private var whiteTurn = true
-    val pieceConfiguration = Array(8) { IntArray(8) { -1 } }
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
+@Parcelize
+class ChessboardState(
+    private var whiteTurn: Boolean = true,
+    val pieceConfiguration: Array<IntArray> = Array(8) { IntArray(8) { -1 } }
+): Parcelable {
     fun resetBoard() {
         ChessboardView.DEFAULT_CHESSBOARD.forEachIndexed { x, arr ->
             arr.forEachIndexed { y, piece -> pieceConfiguration[x][y] = piece }

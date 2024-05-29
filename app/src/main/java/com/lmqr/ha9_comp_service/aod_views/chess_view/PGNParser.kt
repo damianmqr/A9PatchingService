@@ -1,12 +1,26 @@
-package com.lmqr.ha9_comp_service
+package com.lmqr.ha9_comp_service.aod_views.chess_view
 
 import android.content.Context
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import kotlin.random.Random
 
 
+@Parcelize
+data class PGNMove(
+    val figure: Int,
+    val captures: Boolean,
+    val toX: Int,
+    val toY: Int,
+    val fromX: Int,
+    val fromY: Int,
+    val specialState: Int = 0
+): Parcelable
+
+@Parcelize
 data class ChessGame(
     val whitePlayer: String,
     val blackPlayer: String,
@@ -18,7 +32,7 @@ data class ChessGame(
     var currentMove: Int = 0,
     var currentBlackResult: String = "",
     var currentWhiteResult: String = "",
-)
+) : Parcelable
 
 const val PAWN = 0
 const val KNIGHT = 1
@@ -27,15 +41,6 @@ const val ROOK = 3
 const val QUEEN = 4
 const val KING = 5
 
-data class PGNMove(
-    val figure: Int,
-    val captures: Boolean,
-    val toX: Int,
-    val toY: Int,
-    val fromX: Int,
-    val fromY: Int,
-    val specialState: Int = 0
-)
 
 fun String.getValue(tag: String): String? {
     val pattern = "\\[$tag\\s*\"(.*?)\"]".toRegex()

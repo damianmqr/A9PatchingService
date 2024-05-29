@@ -11,4 +11,34 @@
         <item>2</item>
         <item>3</item>
     </string-array>
+    <string-array name="color_type_options">
+        <item>TONAL_SPOT</item>
+        <item>VIBRANT</item>
+        <item>RAINBOW</item>
+        <item>EXPRESSIVE</item>
+        <item>FRUIT_SALAD</item>
+        <item>SPRITZ (RECOMMENDED)</item>
+    </string-array>
+    <string-array name="color_type_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+    </string-array>
+    <string-array name="button_action_entries">
+        <item>Clear Screen</item>
+        <item>Next Track</item>
+        <item>Toggle Music</item>
+        <item>Go Back</item>
+        <item>Open Menu</item>
+    </string-array>
+    <string-array name="button_action_values">
+        <item>clear</item>
+        <item>next_track</item>
+        <item>toggle_music</item>
+        <item>back</item>
+        <item>open_menu</item>
+    </string-array>
 </resources>

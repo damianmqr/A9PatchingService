@@ -10,6 +10,8 @@
 #include <android/log.h>
 #include <ctype.h>
 #include <sys/xattr.h>
+#include <sys/wait.h>
+#include <signal.h>
 
 static const char* kTAG = "a9EinkService";
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, kTAG, __VA_ARGS__))
@@ -17,6 +19,15 @@ static const char* kTAG = "a9EinkService";
 
 #define SOCKET_NAME "0a9_eink_socket"
 #define BUFFER_SIZE 512
+
+static const char* theme_styles[] = {
+        "TONAL_SPOT",
+        "VIBRANT",
+        "RAINBOW",
+        "EXPRESSIVE",
+        "FRUIT_SALAD",
+        "SPRITZ"
+};
 
 int valid_number(const char *s) {
     if(strlen(s) > 4 || strlen(s) == 0)
@@ -26,6 +37,56 @@ int valid_number(const char *s) {
         if (isdigit(*s++) == 0) return 0;
 
     return 1;
+}
+
+int valid_hex_color(const char *s) {
+    if (strlen(s) != 6)
+        return 0;
+
+    while (*s)
+        if (!isxdigit(*s++)) return 0;
+
+    return 1;
+}
+
+void sanitize_input(int theme_style_index, const char* hex_color, char* sanitized_theme_style, char* sanitized_hex_color) {
+    if (theme_style_index < 0 || theme_style_index > 5) {
+        theme_style_index = 5; // Default to monotone
+    }
+    strcpy(sanitized_theme_style, theme_styles[theme_style_index]);
+
+    if (!valid_hex_color(hex_color)) {
+        strcpy(sanitized_hex_color, "333333");
+    } else {
+        strcpy(sanitized_hex_color, hex_color);
+    }
+}
+
+void generate_json_string(char* json_str, const char* theme_style, const char* hex_color) {
+    sprintf(json_str, "{\"android.theme.customization.theme_style\":\"%s\",\"android.theme.customization.color_source\":\"preset\",\"android.theme.customization.system_palette\":\"%s\"}", theme_style, hex_color);
+}
+
+void execute_settings_command(const char* json_str) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/system/bin/settings", "settings", "put", "secure", "theme_customization_overlay_packages", json_str, (char *)NULL);
+        LOGE("execlp failed: %s", strerror(errno));
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+        LOGE("fork failed: %s", strerror(errno));
+    } else {
+        wait(NULL);
+    }
+}
+
+void applyThemeCustomization(int theme_style_index, const char* hex_color) {
+    char sanitized_theme_style[20];
+    char sanitized_hex_color[7];
+    char json_str[BUFFER_SIZE];
+
+    sanitize_input(theme_style_index, hex_color, sanitized_theme_style, sanitized_hex_color);
+    generate_json_string(json_str, sanitized_theme_style, sanitized_hex_color);
+    execute_settings_command(json_str);
 }
 
 void epdForceClear() {
@@ -253,6 +314,14 @@ void processCommand(const char* command) {
     } else if (strncmp(command, "sco", 3) == 0) {
         if(valid_number(command+3))
             setContrast(command+3);
+    } else if (strncmp(command, "theme", 5) == 0) {
+        int theme_style_index;
+        char hex_color[7];
+        if (sscanf(command + 5, "%d %6s", &theme_style_index, hex_color) == 2) {
+            applyThemeCustomization(theme_style_index, hex_color);
+        } else {
+            LOGE("Invalid theme command format");
+        }
     } else {
         LOGE("Unknown command: %s", command);
     }

@@ -1,4 +1,4 @@
-package com.lmqr.ha9_comp_service
+package com.lmqr.ha9_comp_service.aod_views
 
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.util.AttributeSet
 import android.view.View
 import android.widget.LinearLayout
+import com.lmqr.ha9_comp_service.R
 import com.lmqr.ha9_comp_service.databinding.BatteryIndicatorViewBinding
 
 
@@ -63,8 +64,8 @@ class BatteryIndicatorView(context: Context, attrs: AttributeSet) : LinearLayout
             val batteryPct = level * 100 / scale
             val isCharging =
                 status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-
-            binding.batteryPercentage.text = "$batteryPct%"
+            val batteryPctStr = "$batteryPct%"
+            binding.batteryPercentage.text = batteryPctStr
             binding.batteryIcon.setImageResource(
                 when {
                     isCharging -> R.drawable.baseline_battery_charging_full_24
@@ -114,7 +115,9 @@ class BatteryIndicatorView(context: Context, attrs: AttributeSet) : LinearLayout
         }
     }
 
-    init {
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
         val intentFilter = IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED)
             addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)

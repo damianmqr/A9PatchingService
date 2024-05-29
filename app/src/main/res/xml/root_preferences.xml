@@ -1,12 +1,42 @@
-<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
 
     <PreferenceCategory app:title="EInk Service Settings">
+        <ListPreference
+            app:key="single_press_eink_action"
+            app:title="Single Press Action"
+            app:summary="Select an action for single button press"
+            app:entries="@array/button_action_entries"
+            app:entryValues="@array/button_action_values"
+            app:defaultValue="clear"
+            app:dialogTitle="Choose an action for single press" />
 
-        <SwitchPreferenceCompat
-            app:key="swap_clear_button"
-            app:summaryOff="Single Press for Screen Clear\nDouble Press for Menu Access"
-            app:summaryOn="Single Press for Menu Access\nDouble Press for Screen Clear"
-            app:title="Swap Clear and Menu" />
+        <ListPreference
+            app:key="double_press_eink_action"
+            app:title="Double Press Action"
+            app:summary="Select an action for double button press"
+            app:entries="@array/button_action_entries"
+            app:entryValues="@array/button_action_values"
+            app:defaultValue="open_menu"
+            app:dialogTitle="Choose an action for double press" />
+
+        <ListPreference
+            app:key="single_press_eink_action_screen_off"
+            app:title="Single Press Action (Screen off)"
+            app:summary="Select an action for single button press when screen is of"
+            app:entries="@array/button_action_entries"
+            app:entryValues="@array/button_action_values"
+            app:defaultValue="clear"
+            app:dialogTitle="Choose an action for single press when screen is off" />
+
+        <ListPreference
+            app:key="double_press_eink_action_screen_off"
+            app:title="Double Press Action (Screen off)"
+            app:summary="Select an action for double button press when screen is of"
+            app:entries="@array/button_action_entries"
+            app:entryValues="@array/button_action_values"
+            app:defaultValue="dummy"
+            app:dialogTitle="Choose an action for double press when screen is of" />
 
 
         <SwitchPreferenceCompat
@@ -17,6 +47,7 @@
 
 
     </PreferenceCategory>
+
 
     <PreferenceCategory app:title="Refresh Mode Settings">
         <SwitchPreferenceCompat
@@ -37,6 +68,22 @@
             app:defaultValue="2" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="Color Scheme">
+        <ListPreference
+            app:key="color_scheme_type"
+            app:title="Color Scheme Type"
+            app:entries="@array/color_type_options"
+            app:entryValues="@array/color_type_values"
+            app:defaultValue="5" />
+
+        <com.lmqr.ha9_comp_service.ColorProgressPreference
+            app:key="color_scheme_color"
+            app:title="Accent Color"
+            app:updatesContinuously="false"
+            app:min="0"
+            android:max="100"/>
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="Experimental">
         <SwitchPreferenceCompat
             app:key="temperature_slider"
@@ -53,6 +100,13 @@
             app:key="overlay_chess"
             app:summary="Enable chess replays on AOD"
             app:title="Chess AOD" />
+
+        <SwitchPreferenceCompat
+            android:dependency="overlay_aod"
+            app:key="refresh_on_lock"
+            app:summary="Helps avoid ghosting on AOD"
+            app:title="Refresh AOD after screen off"
+            />
 
         <Preference
             app:key="grant_notif_perms"

@@ -11,16 +11,13 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.database.ContentObserver
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Point
-import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -32,14 +29,12 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.SeekBar.OnSeekBarChangeListener
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
+import com.lmqr.ha9_comp_service.button_mapper.ButtonActionManager
 import com.lmqr.ha9_comp_service.command_runners.CommandRunner
 import com.lmqr.ha9_comp_service.command_runners.Commands
 import com.lmqr.ha9_comp_service.command_runners.UnixSocketCommandRunner
-import com.lmqr.ha9_comp_service.databinding.AodLayoutBinding
 import com.lmqr.ha9_comp_service.databinding.FloatingMenuLayoutBinding
-import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 
@@ -50,32 +45,9 @@ class A9AccessibilityService : AccessibilityService(),
     private lateinit var temperatureModeManager: TemperatureModeManager
     private lateinit var refreshModeManager: RefreshModeManager
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var buttonActionManager: ButtonActionManager
+    private lateinit var alwaysOnDisplay: AlwaysOnDisplay
     private var isScreenOn = true
-
-    private val gameManager = GameManager()
-    private fun moveChess() {
-        gameManager.move(this)
-        gameManager.game?.let { game ->
-            aodLayoutBinding?.let { bnd ->
-                bnd.whitePlayer.text = game.whitePlayer
-                bnd.blackPlayer.text = game.blackPlayer
-                bnd.whitePlayerResult.text = game.currentWhiteResult
-                bnd.blackPlayerResult.text = game.currentBlackResult
-                bnd.venue.text = game.event
-                bnd.opening.text = game.opening
-            }
-        }
-    }
-
-    private val moveChessRunnable = object : Runnable {
-        override fun run() {
-            if (isScreenOn)
-                return
-            moveChess()
-            aodLayoutBinding?.chessboard?.updatePieces(gameManager.getPieces())
-            handler.postDelayed(this, 60 * 1000)
-        }
-    }
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -84,41 +56,18 @@ class A9AccessibilityService : AccessibilityService(),
                     isScreenOn = false
                     temperatureModeManager.onScreenChange(false)
                     menuBinding.close()
-                    openAOD()
-                    if (sharedPreferences.getBoolean("overlay_chess", false))
-                        handler.post(moveChessRunnable)
+                    alwaysOnDisplay.openAOD()
+                    if(sharedPreferences.getBoolean("refresh_on_lock", false))
+                        handler.postDelayed({
+                            commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))
+                        }, 150)
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
-                    closeAOD()
-                    handler.removeCallbacks(moveChessRunnable)
+                    alwaysOnDisplay.closeAOD()
                     temperatureModeManager.onScreenChange(true)
                 }
-            }
-        }
-    }
-
-    private val notificationIcons = HashMap<String, StatusBarNotification>()
-
-
-    private val notificationReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            try {
-                val sbn =
-                    intent.getParcelableExtra<StatusBarNotification>(NotificationListener.EXTRA_STATUS_BAR_NOTIFICATION)
-                if (sbn != null) {
-                    if (NotificationListener.ACTION_NOTIFICATION_POSTED == intent.action) {
-                        notificationIcons[sbn.packageName+":"+sbn.id] = sbn
-                        aodLayoutBinding?.notificationIconView?.updateNotifications(notificationIcons.values.toList())
-
-                    } else if (NotificationListener.ACTION_NOTIFICATION_REMOVED == intent.action) {
-                        notificationIcons.remove(sbn.packageName+":"+sbn.id)
-                        aodLayoutBinding?.notificationIconView?.updateNotifications(notificationIcons.values.toList())
-                    }
-                }
-            }catch (ex: Exception){
-                ex.printStackTrace()
             }
         }
     }
@@ -136,9 +85,10 @@ class A9AccessibilityService : AccessibilityService(),
     override fun onCreate() {
         super.onCreate()
         commandRunner =
-            UnixSocketCommandRunner()//RootCommandRunner()//FIFOCommandRunner(filesDir.absolutePath)
+            UnixSocketCommandRunner()
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
+        alwaysOnDisplay = AlwaysOnDisplay(this)
         refreshModeManager = RefreshModeManager(
             sharedPreferences,
             commandRunner
@@ -153,6 +103,8 @@ class A9AccessibilityService : AccessibilityService(),
             getBrightnessFromSetting(),
             commandRunner,
         )
+
+        buttonActionManager = ButtonActionManager(commandRunner)
 
         val filterScreen = IntentFilter()
         filterScreen.addAction(Intent.ACTION_SCREEN_ON)
@@ -170,10 +122,7 @@ class A9AccessibilityService : AccessibilityService(),
             true, contentObserver as ContentObserver
         )
 
-        val filterNotifications = IntentFilter()
-        filterNotifications.addAction(NotificationListener.ACTION_NOTIFICATION_POSTED)
-        filterNotifications.addAction(NotificationListener.ACTION_NOTIFICATION_REMOVED)
-        LocalBroadcastManager.getInstance(baseContext).registerReceiver(notificationReceiver, filterNotifications)
+        updateColorScheme(sharedPreferences)
     }
 
     override fun onInterrupt() {
@@ -183,31 +132,17 @@ class A9AccessibilityService : AccessibilityService(),
     private var lastClickTime: Long = 0
 
     private fun handleSinglePress() {
-        when {
-            !isScreenOn -> {}
-            !sharedPreferences.getBoolean("swap_clear_button", false) -> commandRunner.runCommands(
-                arrayOf(Commands.FORCE_CLEAR)
-            )
-
-            else -> openFloatingMenu()
-        }
+        if(isScreenOn)
+            buttonActionManager.executeSinglePress(this)
+        else
+            buttonActionManager.executeSinglePressScreenOff(this)
     }
 
     private fun handleDoublePress() {
-        when {
-            !isScreenOn -> {
-                if (sharedPreferences.getBoolean("overlay_chess", false)) {
-                    handler.removeCallbacks(moveChessRunnable)
-                    handler.post(moveChessRunnable)
-                }
-            }
-
-            sharedPreferences.getBoolean("swap_clear_button", false) -> commandRunner.runCommands(
-                arrayOf(Commands.FORCE_CLEAR)
-            )
-
-            else -> openFloatingMenu()
-        }
+        if(isScreenOn)
+            buttonActionManager.executeDoublePress(this)
+        else
+            buttonActionManager.executeDoublePressScreenOff(this)
     }
 
     private val singlePressRunnable = Runnable {
@@ -281,7 +216,7 @@ class A9AccessibilityService : AccessibilityService(),
     private var menuBinding: FloatingMenuLayoutBinding? = null
 
     @SuppressLint("ClickableViewAccessibility", "InflateParams")
-    private fun openFloatingMenu() {
+    fun openFloatingMenu() {
         try {
             menuBinding?.run {
                 if (root.visibility == View.VISIBLE) {
@@ -405,82 +340,11 @@ class A9AccessibilityService : AccessibilityService(),
         }
     }
 
-    private fun AodLayoutBinding.loadBackgroundImage() {
-        val file = File(filesDir, "bg_image")
-
-        if (file.exists()) {
-            try {
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                if (bitmap != null) {
-                    val drawable = BitmapDrawable(resources, bitmap)
-                    root.background = drawable
-                } else {
-                    root.setBackgroundColor(Color.WHITE)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                root.setBackgroundColor(Color.WHITE)
-            }
-        } else {
-            root.setBackgroundColor(Color.WHITE)
-        }
-    }
-
-    private fun AodLayoutBinding.updateChessboardVisibility() {
-        if (!sharedPreferences.getBoolean("overlay_chess", false)) {
-            chessboard.visibility = View.GONE
-            chessboardWhitePanel.visibility = View.GONE
-            chessboardBlackPanel.visibility = View.GONE
-            venue.visibility = View.GONE
-            opening.visibility = View.GONE
-        } else {
-            chessboard.visibility = View.VISIBLE
-            chessboardWhitePanel.visibility = View.VISIBLE
-            chessboardBlackPanel.visibility = View.VISIBLE
-            venue.visibility = View.VISIBLE
-            opening.visibility = View.VISIBLE
-        }
-    }
-
-    private var aodLayoutBinding: AodLayoutBinding? = null
-    private fun openAOD() {
-        if (!sharedPreferences.getBoolean("overlay_aod", false))
-            return
-
-        aodLayoutBinding?.root?.run { visibility = View.VISIBLE } ?: run {
-            val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-            val inflater = LayoutInflater.from(this)
-            val view = inflater.inflate(R.layout.aod_layout, null, false)
-
-            val layoutParams = WindowManager.LayoutParams().apply {
-                type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-                format = PixelFormat.OPAQUE
-                flags =
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_FULLSCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-            }
-
-            aodLayoutBinding = AodLayoutBinding.bind(view).apply {
-                wm.addView(root, layoutParams)
-
-                updateChessboardVisibility()
-
-                notificationIconView.updateNotifications(notificationIcons.values.toList())
-
-                loadBackgroundImage()
-            }
-        }
-    }
-
-    private fun closeAOD() {
-        aodLayoutBinding?.root?.visibility = View.GONE
-    }
-
     override fun onDestroy() {
         contentObserver?.let { contentResolver.unregisterContentObserver(it) }
         commandRunner.onDestroy()
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         unregisterReceiver(receiver)
-        LocalBroadcastManager.getInstance(baseContext).unregisterReceiver(notificationReceiver)
         super.onDestroy()
     }
 
@@ -513,6 +377,12 @@ class A9AccessibilityService : AccessibilityService(),
             temperatureModeManager.setMode(TemperatureMode.White)
     }
 
+    private fun updateColorScheme(sharedPreferences: SharedPreferences) = sharedPreferences.run {
+        val type = getString("color_scheme_type", "5")
+        val colorString = getInt("color_scheme_color", 20).progressToHex()
+        commandRunner.runCommands(arrayOf("theme $type $colorString"))
+    }
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
             "disable_nightmode" -> {
@@ -534,9 +404,11 @@ class A9AccessibilityService : AccessibilityService(),
                 sharedPreferences?.let { setCorrectMode(it) }
             }
 
-            "overlay_chess" -> aodLayoutBinding?.updateChessboardVisibility()
+            "color_scheme_type", "color_scheme_color" -> {
+                sharedPreferences?.let { updateColorScheme(it) }
+            }
 
-            "aod_image_updated" -> aodLayoutBinding?.loadBackgroundImage()
+            "overlay_chess", "aod_image_updated" -> alwaysOnDisplay.update()
         }
     }
 }
