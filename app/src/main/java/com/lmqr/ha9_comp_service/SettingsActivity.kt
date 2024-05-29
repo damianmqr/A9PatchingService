@@ -1,10 +1,14 @@
 package com.lmqr.ha9_comp_service
 
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.MenuItem
+import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -26,6 +30,7 @@ class SettingsActivity : AppCompatActivity() {
                 .commit()
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        checkPermissions()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -126,5 +131,29 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
         }
+    }
+
+    private fun checkPermissions(){
+        if(!isAccessibilityServiceEnabled()) {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
+            try {
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabledServices =
+            am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        for (enabledService in enabledServices) {
+            val enabledServiceInfo: ServiceInfo = enabledService.resolveInfo.serviceInfo
+            if (enabledServiceInfo.packageName.equals(packageName))
+                return true
+        }
+        return false
     }
 }
