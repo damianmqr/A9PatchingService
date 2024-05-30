@@ -79,14 +79,6 @@ class SettingsActivity : AppCompatActivity() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
 
-            (findPreference("grant_dnd_perms") as Preference?)?.onPreferenceClickListener =
-                Preference.OnPreferenceClickListener {
-                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    requireContext().startActivity(intent)
-                    true
-                }
-
             (findPreference("grant_notif_perms") as Preference?)?.onPreferenceClickListener =
                 Preference.OnPreferenceClickListener {
                     val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)

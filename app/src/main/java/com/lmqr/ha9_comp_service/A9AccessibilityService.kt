@@ -383,6 +383,8 @@ class A9AccessibilityService : AccessibilityService(),
         commandRunner.runCommands(arrayOf("theme $type $colorString"))
     }
 
+    fun performAODAction() = alwaysOnDisplay.performExtraAction()
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
             "disable_nightmode" -> {

@@ -33,6 +33,7 @@
         <item>Toggle Music</item>
         <item>Go Back</item>
         <item>Open Menu</item>
+        <item>Nothing</item>
     </string-array>
     <string-array name="button_action_values">
         <item>clear</item>
@@ -40,5 +41,20 @@
         <item>toggle_music</item>
         <item>back</item>
         <item>open_menu</item>
+        <item>dummy</item>
+    </string-array>
+    <string-array name="button_action_entries_screen_off">
+        <item>Clear Screen</item>
+        <item>Next Track</item>
+        <item>Toggle Music</item>
+        <item>AOD View Action</item>
+        <item>Nothing</item>
+    </string-array>
+    <string-array name="button_action_values_screen_off">
+        <item>clear</item>
+        <item>next_track</item>
+        <item>toggle_music</item>
+        <item>aod_action</item>
+        <item>dummy</item>
     </string-array>
 </resources>

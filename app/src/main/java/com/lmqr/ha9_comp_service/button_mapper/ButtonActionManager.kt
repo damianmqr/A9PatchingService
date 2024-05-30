@@ -11,6 +11,7 @@ class ButtonActionManager(commandRunner: CommandRunner) {
         "toggle_music" to TogglePauseButtonAction(),
         "back" to BackButtonAction(),
         "open_menu" to ToggleMenuButtonAction(),
+        "aod_action" to PerformAODExtraButtonAction(),
     ).withDefault { DummyButtonAction() }
 
     fun executeDoublePress(context: Context){

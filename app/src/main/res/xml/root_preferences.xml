@@ -24,8 +24,8 @@
             app:key="single_press_eink_action_screen_off"
             app:title="Single Press Action (Screen off)"
             app:summary="Select an action for single button press when screen is of"
-            app:entries="@array/button_action_entries"
-            app:entryValues="@array/button_action_values"
+            app:entries="@array/button_action_entries_screen_off"
+            app:entryValues="@array/button_action_values_screen_off"
             app:defaultValue="clear"
             app:dialogTitle="Choose an action for single press when screen is off" />
 
@@ -33,8 +33,8 @@
             app:key="double_press_eink_action_screen_off"
             app:title="Double Press Action (Screen off)"
             app:summary="Select an action for double button press when screen is of"
-            app:entries="@array/button_action_entries"
-            app:entryValues="@array/button_action_values"
+            app:entries="@array/button_action_entries_screen_off"
+            app:entryValues="@array/button_action_values_screen_off"
             app:defaultValue="dummy"
             app:dialogTitle="Choose an action for double press when screen is of" />
 
@@ -112,11 +112,6 @@
             app:key="grant_notif_perms"
             app:title="Grant Notification Permissions"
             app:summary="Grant notification permissions for AOD"/>
-
-        <Preference
-            app:key="grant_dnd_perms"
-            app:title="Grant DND Permissions"
-            app:summary="Grant do-not-disturb permissions for AOD"/>
 
         <Preference
             app:key="select_aod_bg"
