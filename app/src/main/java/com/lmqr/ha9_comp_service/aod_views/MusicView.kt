@@ -13,7 +13,6 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
-import android.graphics.Rect
 import android.graphics.Shader
 import android.media.AudioManager
 import android.media.AudioPlaybackConfiguration
@@ -32,6 +31,7 @@ import android.view.View
 import java.util.LinkedList
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 class MusicView @JvmOverloads constructor(
     context: Context,
@@ -70,11 +70,11 @@ class MusicView @JvmOverloads constructor(
             context.resources.displayMetrics)
     }
 
-    private val contrastMultiplier = 0.68f
+    private val contrastMultiplier = 0.85f
     private val redValue = 0.3086f * contrastMultiplier
     private val greenValue = 0.6094f * contrastMultiplier
     private val blueValue = 0.0820f * contrastMultiplier
-    private val shiftColor = 73f
+    private val shiftColor = 55f
 
     private val albumPaint: Paint = Paint().apply {
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply {
@@ -123,9 +123,11 @@ class MusicView @JvmOverloads constructor(
             if (!pendingUpdate) {
                 pendingUpdate = true
                 handler.postDelayed({
-                    retrieveAndSetMetadata()
                     pendingUpdate = false
-                }, 350)
+                    handler.postDelayed({
+                        retrieveAndSetMetadata()
+                    }, 100)
+                }, 300)
             }
         }
     }
@@ -166,11 +168,13 @@ class MusicView @JvmOverloads constructor(
     }
 
     private fun drawTextMultiline(canvas: Canvas,
-                                  r: Rect,
+                                  top: Int,
+                                  left: Int,
+                                  right: Int,
                                   text: String,
                                   paint: Paint,
                                   alignLeft: Boolean = true): Float {
-        val lineWidth = r.width()
+        val lineWidth = right - left
         val textQueue = LinkedList(text.split("\\s+".toRegex()))
         var currentLineHeight = paint.descent() - paint.ascent()
         var currentLine = ""
@@ -178,8 +182,8 @@ class MusicView @JvmOverloads constructor(
             val currentWord = textQueue.pop()
             val afterConcat = "$currentLine $currentWord"
             if (paint.measureText(afterConcat) > lineWidth) {
-                val offset = if (alignLeft) 0f else lineWidth - paint.measureText(currentLine)
-                canvas.drawText(currentLine, offset, r.top + currentLineHeight, paint)
+                val offset = left + if (alignLeft) 0f else lineWidth - paint.measureText(currentLine)
+                canvas.drawText(currentLine, offset, top + currentLineHeight, paint)
                 currentLineHeight += paint.descent() - paint.ascent()
                 currentLine = currentWord
             } else {
@@ -187,12 +191,16 @@ class MusicView @JvmOverloads constructor(
             }
         }
         if (currentLine.isNotEmpty()) {
-            val offset = if (alignLeft) 0f else lineWidth - paint.measureText(currentLine)
-            canvas.drawText(currentLine, offset, r.top + currentLineHeight, paint)
+            val offset = left + if (alignLeft) 0f else lineWidth - paint.measureText(currentLine)
+            canvas.drawText(currentLine, offset, top + currentLineHeight, paint)
             return currentLineHeight
         }
         return currentLineHeight - paint.ascent() + paint.descent()
     }
+
+    private var lastCenterX = -1f
+    private var lastCenterY = -1f
+    private var lastRadius = -1f
 
     @SuppressLint("DrawAllocation")
     override fun onDraw(canvas: Canvas) {
@@ -224,16 +232,22 @@ class MusicView @JvmOverloads constructor(
 
                 val centerX = width / 2f
                 val centerY = height / 2f
-                val radius = width / 1.44f
+                val radius = sqrt((width * width + height * height).toFloat()) / 2f
 
-                shaderPaint.shader = RadialGradient(
-                    centerX, centerY, radius,
-                    intArrayOf(
-                        Color.argb(0.4f, 0f, 0f, 0f),
-                        Color.argb(0.15f, 0f, 0f, 0f)),
-                    null,
-                    Shader.TileMode.CLAMP
-                )
+                if(lastCenterX != centerX || lastCenterY != centerY || lastRadius != radius) {
+                    shaderPaint.shader = RadialGradient(
+                        centerX, centerY, radius,
+                        intArrayOf(
+                            Color.argb(0.02f, 0f, 0f, 0f),
+                            Color.argb(0.15f, 0f, 0f, 0f),
+                        ),
+                        null,
+                        Shader.TileMode.CLAMP
+                    )
+                    lastCenterX = centerX
+                    lastCenterY = centerY
+                    lastRadius = radius
+                }
                 canvas.drawCircle(centerX, centerY, radius, shaderPaint)
 
                 canvas.restore()
@@ -255,10 +269,9 @@ class MusicView @JvmOverloads constructor(
                 }
             }
 
-            val titleHeight = drawTextMultiline(canvas, Rect(paddingLeft, paddingTop, width - paddingRight, height), title, titlePaint, false)
+            val titleHeight = drawTextMultiline(canvas, paddingTop, paddingLeft, width - paddingRight, title, titlePaint, false)
 
-            drawTextMultiline(canvas,
-                Rect(paddingLeft, (paddingTop + titleHeight).toInt(), width - paddingRight, height), artist, artistPaint, false)
+            drawTextMultiline(canvas, (paddingTop + titleHeight).toInt(), paddingLeft, width - paddingRight, artist, artistPaint, false)
         }
     }
 
@@ -271,9 +284,11 @@ class MusicView @JvmOverloads constructor(
             if (controllers != null) {
                 pendingUpdate = true
                 handler.postDelayed({
-                    retrieveAndSetMetadata()
                     pendingUpdate = false
-                }, 350)
+                    handler.postDelayed({
+                        retrieveAndSetMetadata()
+                    }, 100)
+                }, 300)
             } else {
                 musicState = MusicState()
             }
