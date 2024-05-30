@@ -3,8 +3,7 @@ package com.lmqr.ha9_comp_service.aod_views
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
+import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -22,9 +21,10 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.net.Uri
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.util.AttributeSet
 import android.util.Log
 import android.util.TypedValue
@@ -44,7 +44,7 @@ class MusicView @JvmOverloads constructor(
             field = value
             invalidate()
             handler.removeCallbacks(pollingRunnable)
-            if(field.isPlaying && field.title.isNotEmpty()){
+            if (field.isPlaying && field.title.isNotEmpty()) {
                 val pollingTime = min(field.length + 500L, 10 * 60 * 1000L)
                 Log.d("MusicView", "Polling in $pollingTime")
                 handler.postDelayed(pollingRunnable, pollingTime)
@@ -130,9 +130,16 @@ class MusicView @JvmOverloads constructor(
         }
     }
 
-
+    private fun isNotificationListenerEnabled(): Boolean {
+        val cn = ComponentName(context, NotificationListener::class.java)
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(cn.flattenToString())
+    }
 
     private fun retrieveAndSetMetadata() {
+        if(!mediaCallbackRegistered)
+            return
+
         val controllers = mediaSessionManager.getActiveSessions(
             ComponentName(context, NotificationListener::class.java)
         )
@@ -142,17 +149,17 @@ class MusicView @JvmOverloads constructor(
                 controllers.firstOrNull(MediaController::isActive)?.let { controller ->
                     val metadata = controller.metadata
                     val playbackState = controller.playbackState
-                    val totalDuration = (metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?:0L)
-                    val currentPosition = (playbackState?.position?: 0L)
-                    val playbackSpeed = max((playbackState?.playbackSpeed?:1f), 0.1f)
+                    val totalDuration = (metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L)
+                    val currentPosition = (playbackState?.position ?: 0L)
+                    val playbackSpeed = max((playbackState?.playbackSpeed ?: 1f), 0.1f)
 
                     MusicState(
                         albumArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                            ?:metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART),
+                            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART),
                         title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "",
                         artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "",
                         isPlaying = controller.isPlaying(),
-                        length = ((totalDuration - currentPosition)/playbackSpeed).toLong()
+                        length = ((totalDuration - currentPosition) / playbackSpeed).toLong()
                     )
                 } ?: MusicState()
         }
@@ -167,20 +174,20 @@ class MusicView @JvmOverloads constructor(
         val textQueue = LinkedList(text.split("\\s+".toRegex()))
         var currentLineHeight = paint.descent() - paint.ascent()
         var currentLine = ""
-        while (!textQueue.isEmpty()){
+        while (!textQueue.isEmpty()) {
             val currentWord = textQueue.pop()
             val afterConcat = "$currentLine $currentWord"
-            if(paint.measureText(afterConcat) > lineWidth){
-                val offset = if(alignLeft) 0f else lineWidth - paint.measureText(currentLine)
+            if (paint.measureText(afterConcat) > lineWidth) {
+                val offset = if (alignLeft) 0f else lineWidth - paint.measureText(currentLine)
                 canvas.drawText(currentLine, offset, r.top + currentLineHeight, paint)
                 currentLineHeight += paint.descent() - paint.ascent()
                 currentLine = currentWord
-            }else{
+            } else {
                 currentLine = afterConcat
             }
         }
-        if(currentLine.isNotEmpty()){
-            val offset = if(alignLeft) 0f else lineWidth - paint.measureText(currentLine)
+        if (currentLine.isNotEmpty()) {
+            val offset = if (alignLeft) 0f else lineWidth - paint.measureText(currentLine)
             canvas.drawText(currentLine, offset, r.top + currentLineHeight, paint)
             return currentLineHeight
         }
@@ -273,47 +280,72 @@ class MusicView @JvmOverloads constructor(
         }
     }
 
-    private val notificationListenerConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            initMediaControllerCallbacks()
-        }
-
-        override fun onServiceDisconnected(name: ComponentName) {
-            Log.d("MusicStateManager", "NotificationListener service disconnected")
+    private val settingsObserver = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            super.onChange(selfChange, uri)
+            if (isNotificationListenerEnabled()) {
+                if(!mediaCallbackRegistered)
+                    initMediaControllerCallbacks()
+            } else {
+                if(mediaCallbackRegistered) {
+                    musicState = MusicState()
+                    mediaSessionManager.removeOnActiveSessionsChangedListener(
+                        activeSessionsChangedListener
+                    )
+                    audioManager.unregisterAudioPlaybackCallback(audioPlaybackCallback)
+                    mediaCallbackRegistered = false
+                }
+            }
         }
     }
 
+    private var settingCallbackRegistered = false
+    private var mediaCallbackRegistered = false
     private fun initMediaControllerCallbacks() {
-        mediaSessionManager.addOnActiveSessionsChangedListener(
-            activeSessionsChangedListener,
-            ComponentName(context, NotificationListener::class.java)
-        )
-        retrieveAndSetMetadata()
+        if (isNotificationListenerEnabled()) {
+            mediaSessionManager.addOnActiveSessionsChangedListener(
+                activeSessionsChangedListener,
+                ComponentName(context, NotificationListener::class.java)
+            )
+            retrieveAndSetMetadata()
+            audioManager.registerAudioPlaybackCallback(audioPlaybackCallback, null)
+            mediaCallbackRegistered = true
+        } else {
+            Log.d("MusicView", "Notification listener service is not enabled")
+        }
     }
+
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        val intent = Intent(context, NotificationListener::class.java)
-        context.bindService(intent, notificationListenerConnection, Context.BIND_AUTO_CREATE)
-        audioManager.registerAudioPlaybackCallback(audioPlaybackCallback, null)
+        if (isNotificationListenerEnabled()) {
+            initMediaControllerCallbacks()
+        }
+        context.contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor("enabled_notification_listeners"),
+            false, settingsObserver)
+        settingCallbackRegistered = true
     }
 
     override fun onDetachedFromWindow() {
         handler.removeCallbacks(pollingRunnable)
-        mediaSessionManager.removeOnActiveSessionsChangedListener(activeSessionsChangedListener)
-        context.unbindService(notificationListenerConnection)
-        audioManager.unregisterAudioPlaybackCallback(audioPlaybackCallback)
+        if(mediaCallbackRegistered) {
+            mediaSessionManager.removeOnActiveSessionsChangedListener(activeSessionsChangedListener)
+            audioManager.unregisterAudioPlaybackCallback(audioPlaybackCallback)
+        }
+        if(settingCallbackRegistered)
+            context.contentResolver.unregisterContentObserver(settingsObserver)
         super.onDetachedFromWindow()
     }
 }
 
-private fun MediaController.isPlaying() = playbackState?.state?.let{ state ->
+private fun MediaController.isPlaying() = playbackState?.state?.let { state ->
     state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_BUFFERING
-}?:false
+} ?: false
 
-private fun MediaController.isActive() = playbackState?.state?.let{ state ->
+private fun MediaController.isActive() = playbackState?.state?.let { state ->
     state != PlaybackState.STATE_NONE && state != PlaybackState.STATE_ERROR
-}?:false
+} ?: false
 
 data class MusicState(
     val albumArt: Bitmap? = null,
