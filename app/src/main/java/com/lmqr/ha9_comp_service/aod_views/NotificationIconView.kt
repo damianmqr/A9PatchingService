@@ -5,23 +5,24 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
-import android.os.IBinder
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.Parcel
 import android.os.Parcelable
+import android.provider.Settings
 import android.service.notification.StatusBarNotification
 import android.util.AttributeSet
-import android.util.Log
 import android.view.View
 import androidx.core.content.res.ResourcesCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlin.math.min
 
-
-class NotificationIconView(context: Context, attrs: AttributeSet) :
-    View(context, attrs) {
+class NotificationIconView(context: Context, attrs: AttributeSet) : View(context, attrs) {
     private val notificationIcons = HashMap<String, StatusBarNotification>()
     private val icons = HashMap<String, Drawable>()
     private var activeIcons = emptyList<String>()
@@ -30,31 +31,45 @@ class NotificationIconView(context: Context, attrs: AttributeSet) :
     private val notificationReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             try {
-                val sbn =
-                    intent.getParcelableExtra<StatusBarNotification>(NotificationListener.EXTRA_STATUS_BAR_NOTIFICATION)
+                val sbn = intent.getParcelableExtra<StatusBarNotification>(NotificationListener.EXTRA_STATUS_BAR_NOTIFICATION)
                 if (sbn != null) {
                     if (NotificationListener.ACTION_NOTIFICATION_POSTED == intent.action) {
-                        notificationIcons[sbn.packageName+":"+sbn.id] = sbn
+                        notificationIcons[sbn.packageName + ":" + sbn.id] = sbn
                         updateNotifications(notificationIcons.values.toList())
-
                     } else if (NotificationListener.ACTION_NOTIFICATION_REMOVED == intent.action) {
-                        notificationIcons.remove(sbn.packageName+":"+sbn.id)
+                        notificationIcons.remove(sbn.packageName + ":" + sbn.id)
                         updateNotifications(notificationIcons.values.toList())
                     }
                 }
-            }catch (ex: Exception){
+            } catch (ex: Exception) {
                 ex.printStackTrace()
             }
         }
     }
 
     fun updateNotifications(notifications: List<StatusBarNotification>) {
-        for(notification in notifications){
-            if(!icons.containsKey(notification.packageName)) {
-                val iconResource = context.packageManager.getResourcesForApplication(notification.packageName)
-                icons[notification.packageName] =
-                    ResourcesCompat.getDrawable(iconResource, notification.notification.smallIcon.resId, context.theme) as Drawable
-                    //context.packageManager.getApplicationIcon(notification.packageName)
+        for (notification in notifications) {
+            val packageName = notification.packageName
+            if (!icons.containsKey(packageName)) {
+                try {
+                    val iconResource = context.packageManager.getResourcesForApplication(packageName)
+                    val iconId = notification.notification.smallIcon.resId
+                    val icon = ResourcesCompat.getDrawable(iconResource, iconId, context.theme)
+
+                    if (icon != null && icon.intrinsicWidth > 0 && icon.intrinsicHeight > 0) {
+                        icons[packageName] = icon
+                        return
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                try {
+                    val appIcon = context.packageManager.getApplicationIcon(packageName)
+                    icons[packageName] = appIcon
+                } catch (e: PackageManager.NameNotFoundException) {
+                    e.printStackTrace()
+                }
             }
         }
         activeIcons = notifications.map(StatusBarNotification::getPackageName).distinct()
@@ -68,7 +83,7 @@ class NotificationIconView(context: Context, attrs: AttributeSet) :
         val iconDivider = (iconSpace - iconWidth) / 2
         var i = 0
         for (iconKey in activeIcons) {
-            icons[iconKey]?.let{ icon ->
+            icons[iconKey]?.let { icon ->
                 icon.setBounds(i * iconSpace + iconDivider, iconDivider, i * iconSpace + iconWidth, iconDivider + iconWidth)
                 icon.draw(canvas)
                 i++
@@ -76,17 +91,46 @@ class NotificationIconView(context: Context, attrs: AttributeSet) :
         }
     }
 
-    private val notificationListenerConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            val filterNotifications = IntentFilter()
-            filterNotifications.addAction(NotificationListener.ACTION_NOTIFICATION_POSTED)
-            filterNotifications.addAction(NotificationListener.ACTION_NOTIFICATION_REMOVED)
-            LocalBroadcastManager.getInstance(context).registerReceiver(notificationReceiver, filterNotifications)
-            updateNotifications(notificationIcons.values.toList())
-        }
+    private val handler = Handler(Looper.getMainLooper())
 
-        override fun onServiceDisconnected(name: ComponentName) {
-            Log.d("NotificationIconView", "NotificationListener service disconnected")
+    private val settingsObserver = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            super.onChange(selfChange, uri)
+            if (isNotificationListenerEnabled()) {
+                if (!notificationReceiverRegistered)
+                    registerReceiver()
+            } else {
+                if (notificationReceiverRegistered) {
+                    unregisterReceiver()
+                    notificationReceiverRegistered = false
+                }
+            }
+        }
+    }
+
+    private var notificationReceiverRegistered = false
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val cn = ComponentName(context, NotificationListener::class.java)
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(cn.flattenToString())
+    }
+
+    private fun registerReceiver() {
+        val filterNotifications = IntentFilter().apply {
+            addAction(NotificationListener.ACTION_NOTIFICATION_POSTED)
+            addAction(NotificationListener.ACTION_NOTIFICATION_REMOVED)
+        }
+        LocalBroadcastManager.getInstance(context).registerReceiver(notificationReceiver, filterNotifications)
+        updateNotifications(notificationIcons.values.toList())
+        notificationReceiverRegistered = true
+    }
+
+    private fun unregisterReceiver() {
+        try {
+            LocalBroadcastManager.getInstance(context).unregisterReceiver(notificationReceiver)
+        } catch (e: IllegalArgumentException) {
+            // Receiver not registered
         }
     }
 
@@ -141,16 +185,22 @@ class NotificationIconView(context: Context, attrs: AttributeSet) :
         }
     }
 
-
-
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        val intent = Intent(context, NotificationListener::class.java)
-        context.bindService(intent, notificationListenerConnection, Context.BIND_AUTO_CREATE)
+        context.contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor("enabled_notification_listeners"),
+            false, settingsObserver
+        )
+        if (isNotificationListenerEnabled()) {
+            registerReceiver()
+        }
     }
 
     override fun onDetachedFromWindow() {
-        LocalBroadcastManager.getInstance(context).unregisterReceiver(notificationReceiver)
+        if (notificationReceiverRegistered) {
+            unregisterReceiver()
+        }
+        context.contentResolver.unregisterContentObserver(settingsObserver)
         super.onDetachedFromWindow()
     }
 }
