@@ -56,7 +56,8 @@ class A9AccessibilityService : AccessibilityService(),
                     isScreenOn = false
                     temperatureModeManager.onScreenChange(false)
                     menuBinding.close()
-                    alwaysOnDisplay.openAOD()
+                    if(!sharedPreferences.getBoolean("disable_overlay_aod", false))
+                        alwaysOnDisplay.openAOD()
                     if(sharedPreferences.getBoolean("refresh_on_lock", false))
                         handler.postDelayed({
                             commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))

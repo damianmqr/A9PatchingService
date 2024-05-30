@@ -41,9 +41,16 @@
 
         <SwitchPreferenceCompat
             app:key="disable_nightmode"
+            app:disableDependentsState="true"
             app:summaryOff="Disable toggle for nightmode, the screen will only use white light"
             app:summaryOn="Enable nightmode toggle in menu"
             app:title="Disable Nightmode" />
+
+        <SwitchPreferenceCompat
+            app:key="temperature_slider"
+            app:dependency="disable_nightmode"
+            app:summary="Enable slider in place of toggle"
+            app:title="Enable Temperature Slider" />
 
 
     </PreferenceCategory>
@@ -84,29 +91,26 @@
             android:max="100"/>
     </PreferenceCategory>
 
-    <PreferenceCategory app:title="Experimental">
-        <SwitchPreferenceCompat
-            app:key="temperature_slider"
-            app:summary="Enable slider in place of toggle"
-            app:title="Enable Temperature Slider" />
+    <PreferenceCategory app:title="Always On Display">
 
         <SwitchPreferenceCompat
-            app:key="overlay_aod"
-            app:summary="Draw a custom AOD on stock"
-            app:title="Overlay AOD" />
+            app:key="disable_overlay_aod"
+            app:disableDependentsState="true"
+            app:summary="Disable custom AOD on stock"
+            app:title="Disable Overlay AOD" />
 
         <SwitchPreferenceCompat
-            app:dependency="overlay_aod"
+            app:dependency="disable_overlay_aod"
             app:key="overlay_chess"
             app:summary="Enable chess replays on AOD"
             app:title="Chess AOD" />
 
         <SwitchPreferenceCompat
-            android:dependency="overlay_aod"
+            android:dependency="disable_overlay_aod"
             app:key="refresh_on_lock"
             app:summary="Helps avoid ghosting on AOD"
             app:title="Refresh AOD after screen off"
-            />
+            app:defaultValue="true"/>
 
         <Preference
             app:key="grant_notif_perms"
@@ -115,10 +119,12 @@
 
         <Preference
             app:key="select_aod_bg"
+            android:dependency="disable_overlay_aod"
             app:title="Select Background for AOD" />
 
         <Preference
             app:key="remove_aod_bg"
+            android:dependency="disable_overlay_aod"
             app:title="Remove Background for AOD" />
     </PreferenceCategory>
 

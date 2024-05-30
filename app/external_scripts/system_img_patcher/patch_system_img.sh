@@ -31,6 +31,7 @@ mount -o loop,rw s-ab-raw.img d
     [ro.secure]="1"
     [ro.debuggable]="0"
     [ro.build.type]="user"
+    [persist.sys.overlay.aod]="true"
   )
 
   for prop in "${!properties[@]}"; do
@@ -85,6 +86,7 @@ mount -o loop,rw s-ab-raw.img d
   setfattr -n security.selinux -v u:object_r:system_file:s0 app/a9service.apk
 
   sed -i '1s|^|service a9_eink_server /system/bin/a9_eink_server\n    disabled\n\n|' etc/init/vndk.rc
+  sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ exec_background u:r:phhsu_daemon:s0 root -- /system/bin/cmd overlay enable me.phh.treble.overlay.misc.aod_systemui' etc/init/vndk.rc
   sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ exec_background u:r:phhsu_daemon:s0 root -- /system/bin/service call SurfaceFlinger 1008 i32 1' etc/init/vndk.rc
   sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ start a9_eink_server' etc/init/vndk.rc
   sed -i '/.*on property:sys.boot_completed=1/a\ \ \ \ exec_background u:r:phhsu_daemon:s0 root -- /system/bin/settings put secure enabled_accessibility_services com.lmqr.ha9_comp_service/.A9AccessibilityService' etc/init/vndk.rc
