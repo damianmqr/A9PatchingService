@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -144,5 +145,24 @@ class BatteryIndicatorView(context: Context, attrs: AttributeSet) : LinearLayout
         super.onDetachedFromWindow()
         context.unregisterReceiver(systemStatusReceiver)
         connectivityManager.unregisterNetworkCallback(networkCallback)
+    }
+
+    fun setWhite(left: Boolean, right: Boolean) {
+        val colorLeft = if(left)
+            Color.WHITE
+        else
+            Color.BLACK
+
+        val colorRight = if(right)
+            Color.WHITE
+        else
+            Color.BLACK
+
+        binding.batteryIcon.setColorFilter(colorLeft)
+        binding.batteryPercentage.setTextColor(colorLeft)
+
+        binding.iconWifi.setColorFilter(colorRight)
+        binding.iconFlightMode.setColorFilter(colorRight)
+        binding.iconDoNotDisturb.setColorFilter(colorRight)
     }
 }

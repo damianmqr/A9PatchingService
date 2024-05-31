@@ -8,6 +8,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Handler
@@ -27,6 +29,14 @@ class NotificationIconView(context: Context, attrs: AttributeSet) : View(context
     private val icons = HashMap<String, Drawable>()
     private var activeIcons = emptyList<String>()
     private val maxIcons = 5
+
+    var adjustToLighten = true
+        set(value) {
+            if(value != field){
+                field = value
+                postInvalidate()
+            }
+        }
 
     private val notificationReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -76,15 +86,43 @@ class NotificationIconView(context: Context, attrs: AttributeSet) : View(context
         postInvalidate()
     }
 
+    private val lightColorMatrixFilter = ColorMatrixColorFilter(
+        ColorMatrix().apply {
+            set(floatArrayOf(
+                0.8f, 0f, 0f, 0f, 50f,
+                0f, 0.8f, 0f, 0f, 50f,
+                0f, 0f, 0.8f, 0f, 50f,
+                0f, 0f, 0f, 1f, 0f
+            ))
+        }
+    )
+
+    private val darkenColorMatrixFilter = ColorMatrixColorFilter(
+        ColorMatrix().apply {
+            set(floatArrayOf(
+                0.8f, 0f, 0f, 0f, -50f,
+                0f, 0.8f, 0f, 0f, -50f,
+                0f, 0f, 0.8f, 0f, -50f,
+                0f, 0f, 0f, 1f, 0f
+            ))
+        }
+    )
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val iconSpace = min(width / maxIcons, height)
         val iconWidth = iconSpace * 9 / 10
         val iconDivider = (iconSpace - iconWidth) / 2
+
         var i = 0
         for (iconKey in activeIcons) {
             icons[iconKey]?.let { icon ->
                 icon.setBounds(i * iconSpace + iconDivider, iconDivider, i * iconSpace + iconWidth, iconDivider + iconWidth)
+                icon.colorFilter =
+                    if (adjustToLighten)
+                        lightColorMatrixFilter
+                    else
+                        darkenColorMatrixFilter
                 icon.draw(canvas)
                 i++
             }

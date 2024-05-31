@@ -2,12 +2,14 @@ package com.lmqr.ha9_comp_service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -64,6 +66,9 @@ class AlwaysOnDisplay(
                 attachToWindowManager(
                     it
                 )
+                handler.post{
+                    update()
+                }
             }
         handler.post(performExtraActionRunnable)
     }
@@ -87,6 +92,27 @@ class AlwaysOnDisplay(
         }
 }
 
+private fun getLuminanceForView(bitmap: Bitmap, offsetX: Int, offsetY: Int, viewLeft: Int, viewTop: Int, viewWidth: Int, viewHeight: Int): Float {
+    val startX = maxOf(offsetX + viewLeft, 0)
+    val startY = maxOf(offsetY + viewTop, 0)
+    val width = minOf(viewWidth, bitmap.width - startX)
+    val height = minOf(viewHeight, bitmap.height - startY)
+    if(width < 0 || height < 0)
+        return 0f
+    val pixels = IntArray(width * height)
+    bitmap.getPixels(pixels, 0, width, startX, startY, width, height)
+    return Color.luminance(
+        Color.rgb(
+            pixels.sumOf(Color::red) / pixels.size,
+            pixels.sumOf(Color::green) / pixels.size,
+            pixels.sumOf(Color::blue) / pixels.size
+        )
+    )
+}
+
+private fun View.getLuminance(bitmap: Bitmap, offsetX: Int, offsetY: Int) =
+    getLuminanceForView(bitmap, offsetX, offsetY, left, top, width, height)
+
 private fun AodLayoutBinding.loadBackgroundImage(ctx: Context) {
     val file = File(ctx.filesDir, "bg_image")
 
@@ -94,10 +120,56 @@ private fun AodLayoutBinding.loadBackgroundImage(ctx: Context) {
         try {
             val bitmap = BitmapFactory.decodeFile(file.absolutePath)
             if (bitmap != null) {
-                val drawable = BitmapDrawable(ctx.resources, bitmap)
-                root.background = drawable
-            } else {
-                root.setBackgroundColor(Color.WHITE)
+                val viewWidth = root.width
+                val viewHeight = root.height
+                var offsetX = 0
+                var offsetY = 0
+                val scaledBitmap = if(viewWidth * bitmap.height < bitmap.width * viewHeight){
+                    val newWidth = viewHeight * bitmap.width / bitmap.height
+                    offsetX = (newWidth - viewWidth) / 2
+                    Bitmap.createScaledBitmap(
+                        bitmap,
+                        newWidth,
+                        viewHeight,
+                        true
+                    )
+                } else {
+                    val newHeight = viewWidth * bitmap.height / bitmap.width
+                    offsetY = (newHeight - viewHeight) / 2
+                    Bitmap.createScaledBitmap(
+                        bitmap,
+                        viewWidth,
+                        newHeight,
+                        true
+                    )
+                }
+
+
+                val scaledDrawable = BitmapDrawable(ctx.resources, scaledBitmap)
+
+                scaledDrawable.gravity = Gravity.CENTER
+                root.background = scaledDrawable
+
+                timeClock.setTextColor(
+                    if(timeClock.getLuminance(bitmap, offsetX, offsetY) > 0.5)
+                        Color.BLACK
+                    else
+                        Color.WHITE
+                )
+                dateClock.setTextColor(
+                    if(dateClock.getLuminance(bitmap, offsetX, offsetY) > 0.5)
+                        Color.BLACK
+                    else
+                        Color.WHITE
+                )
+                notificationIconView.adjustToLighten = notificationIconView.getLuminance(bitmap, offsetX, offsetY) < 0.5
+
+                batteryIndicator.run {
+                    batteryIndicator.setWhite(
+                        left = getLuminanceForView(bitmap, offsetX, offsetY, left, top, width/3, height) > 0.5,
+                        right = getLuminanceForView(bitmap, offsetX, offsetY, left + width * 2 / 3, top, width/3, height) > 0.5,
+                    )
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
