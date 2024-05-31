@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import com.lmqr.ha9_comp_service.quick_settings.toggle
 import java.io.File
 import java.io.FileOutputStream
 
@@ -67,13 +68,7 @@ class SettingsActivity : AppCompatActivity() {
             }
 
         private fun onUpdatedImage() {
-            preferenceManager.sharedPreferences?.run {
-                edit().putBoolean(
-                    "aod_image_updated", !getBoolean(
-                        "aod_image_updated", false
-                    )
-                ).apply()
-            }
+            preferenceManager.sharedPreferences?.toggle("aod_image_updated")
         }
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {

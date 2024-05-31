@@ -1,10 +1,11 @@
-package com.lmqr.ha9_comp_service
+package com.lmqr.ha9_comp_service.quick_settings
 
 import android.content.SharedPreferences
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.preference.PreferenceManager
+import com.lmqr.ha9_comp_service.R
 
 class NightModeTile : TileService() {
 
@@ -43,11 +44,7 @@ class NightModeTile : TileService() {
 
     override fun onClick() {
         super.onClick()
-        with(sharedPreferences.edit()) {
-            val currentState = sharedPreferences.getBoolean(nightModeKey, false)
-            putBoolean(nightModeKey, !currentState)
-            apply()
-        }
+        sharedPreferences.toggle(nightModeKey)
     }
 
     override fun onStopListening() {

@@ -15,6 +15,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -412,6 +413,17 @@ class A9AccessibilityService : AccessibilityService(),
             }
 
             "overlay_chess", "aod_image_updated" -> alwaysOnDisplay.update()
+
+            "close_status_bar" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+            }
+
+            "run_clear_screen" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+                handler.postDelayed({
+                    commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))
+                }, 700)
+            }
         }
     }
 }
