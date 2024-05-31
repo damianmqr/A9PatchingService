@@ -151,33 +151,52 @@ private fun AodLayoutBinding.loadBackgroundImage(ctx: Context) {
                 root.background = scaledDrawable
 
                 timeClock.setTextColor(
-                    if(timeClock.getLuminance(bitmap, offsetX, offsetY) > 0.5)
+                    if(timeClock.getLuminance(scaledBitmap, offsetX, offsetY) > 0.5)
                         Color.BLACK
                     else
                         Color.WHITE
                 )
                 dateClock.setTextColor(
-                    if(dateClock.getLuminance(bitmap, offsetX, offsetY) > 0.5)
+                    if(dateClock.getLuminance(scaledBitmap, offsetX, offsetY) > 0.5)
                         Color.BLACK
                     else
                         Color.WHITE
                 )
-                notificationIconView.adjustToLighten = notificationIconView.getLuminance(bitmap, offsetX, offsetY) < 0.5
+                notificationIconView.adjustToLighten = notificationIconView.getLuminance(scaledBitmap, offsetX, offsetY) < 0.5
 
                 batteryIndicator.run {
                     batteryIndicator.setWhite(
-                        left = getLuminanceForView(bitmap, offsetX, offsetY, left, top, width/3, height) > 0.5,
-                        right = getLuminanceForView(bitmap, offsetX, offsetY, left + width * 2 / 3, top, width/3, height) > 0.5,
+                        left = getLuminanceForView(
+                            scaledBitmap,
+                            offsetX,
+                            offsetY,
+                            left,
+                            top,
+                            width / 3,
+                            height
+                        ) < 0.5,
+                        right = getLuminanceForView(
+                            scaledBitmap,
+                            offsetX,
+                            offsetY,
+                            left + width * 2 / 3,
+                            top,
+                            width / 3,
+                            height
+                        ) < 0.5,
                     )
                 }
+                return
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            root.setBackgroundColor(Color.WHITE)
         }
-    } else {
-        root.setBackgroundColor(Color.WHITE)
     }
+    root.setBackgroundColor(Color.WHITE)
+    timeClock.setTextColor(Color.BLACK)
+    dateClock.setTextColor(Color.BLACK)
+    notificationIconView.adjustToLighten = false
+    batteryIndicator.setWhite(left = false, right = false)
 }
 
 private fun AodLayoutBinding.updateExtraViewVisibility(ctx: Context) {
