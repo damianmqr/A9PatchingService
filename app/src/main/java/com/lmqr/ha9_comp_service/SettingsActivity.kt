@@ -1,6 +1,7 @@
 package com.lmqr.ha9_comp_service
 
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -15,12 +16,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import com.lmqr.ha9_comp_service.quick_settings.toggle
-import java.io.File
 import java.io.FileOutputStream
 
 
 class SettingsActivity : AppCompatActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings_activity)
@@ -46,11 +45,18 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
+
+        private val filePermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                getBackgroundFileImage(requireContext())
+            }
+        }
+
         private val imagePickerLauncher =
             registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
                 uri?.let {
                     activity?.run {
-                        val file = File(filesDir, "bg_image")
+                        val file = getBackgroundFileImage(this)
                         contentResolver.openInputStream(it)?.run {
                             FileOutputStream(file).use { fileOutputStream ->
                                 copyTo(fileOutputStream)
@@ -92,7 +98,7 @@ class SettingsActivity : AppCompatActivity() {
 
             (findPreference("remove_aod_bg") as Preference?)?.onPreferenceClickListener =
                 Preference.OnPreferenceClickListener {
-                    val file = File(requireContext().filesDir, "bg_image")
+                    val file = getBackgroundFileImage(requireContext())
                     if (file.exists()) {
                         if (file.delete()) {
                             Toast.makeText(
@@ -114,6 +120,28 @@ class SettingsActivity : AppCompatActivity() {
                             "No background image to remove.",
                             Toast.LENGTH_SHORT
                         ).show()
+                    }
+                    true
+                }
+
+            (findPreference("request_all_file") as Preference?)?.onPreferenceClickListener =
+                Preference.OnPreferenceClickListener {
+                    try {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        intent.addCategory("android.intent.category.DEFAULT")
+                        intent.setData(
+                            Uri.parse(
+                                String.format(
+                                    "package:%s",
+                                    requireActivity().packageName
+                                )
+                            )
+                        )
+                        filePermissionLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent()
+                        intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        filePermissionLauncher.launch(intent)
                     }
                     true
                 }

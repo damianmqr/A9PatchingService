@@ -18,7 +18,6 @@ import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.aod_views.AODExtraView
 import com.lmqr.ha9_comp_service.aod_views.chess_view.ChessboardView
 import com.lmqr.ha9_comp_service.databinding.AodLayoutBinding
-import java.io.File
 import java.lang.ref.WeakReference
 
 class AlwaysOnDisplay(
@@ -61,8 +60,10 @@ class AlwaysOnDisplay(
 
     fun openAOD() {
         aodLayoutBinding?.root
-            ?.run { visibility = View.VISIBLE }
-            ?: contextWeakReference.get()?.let {
+            ?.run {
+                visibility = View.VISIBLE
+                contextWeakReference.get()?.let { aodLayoutBinding?.loadBackgroundImage(it) }
+            } ?: contextWeakReference.get()?.let {
                 attachToWindowManager(
                     it
                 )
@@ -90,6 +91,99 @@ class AlwaysOnDisplay(
                 updateExtraViewVisibility(ctx)
             }
         }
+
+    private var lastTimeImage = 0L
+
+    private fun AodLayoutBinding.loadBackgroundImage(ctx: Context) {
+        val file = getBackgroundFileImage(ctx)
+
+        if (file.exists()) {
+            if(lastTimeImage == file.lastModified())
+                return
+            lastTimeImage = file.lastModified()
+
+            try {
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                if (bitmap != null) {
+                    val viewWidth = root.width
+                    val viewHeight = root.height
+                    var offsetX = 0
+                    var offsetY = 0
+                    val scaledBitmap = if(viewWidth * bitmap.height < bitmap.width * viewHeight){
+                        val newWidth = viewHeight * bitmap.width / bitmap.height
+                        offsetX = (newWidth - viewWidth) / 2
+                        Bitmap.createScaledBitmap(
+                            bitmap,
+                            newWidth,
+                            viewHeight,
+                            true
+                        )
+                    } else {
+                        val newHeight = viewWidth * bitmap.height / bitmap.width
+                        offsetY = (newHeight - viewHeight) / 2
+                        Bitmap.createScaledBitmap(
+                            bitmap,
+                            viewWidth,
+                            newHeight,
+                            true
+                        )
+                    }
+
+
+                    val scaledDrawable = BitmapDrawable(ctx.resources, scaledBitmap)
+
+                    scaledDrawable.gravity = Gravity.CENTER
+                    root.background = scaledDrawable
+
+                    timeClock.setTextColor(
+                        if(timeClock.getLuminance(scaledBitmap, offsetX, offsetY) > 0.5)
+                            Color.BLACK
+                        else
+                            Color.WHITE
+                    )
+                    dateClock.setTextColor(
+                        if(dateClock.getLuminance(scaledBitmap, offsetX, offsetY) > 0.5)
+                            Color.BLACK
+                        else
+                            Color.WHITE
+                    )
+                    notificationIconView.adjustToLighten = notificationIconView.getLuminance(scaledBitmap, offsetX, offsetY) < 0.5
+
+                    batteryIndicator.run {
+                        batteryIndicator.setWhite(
+                            left = getLuminanceForView(
+                                scaledBitmap,
+                                offsetX,
+                                offsetY,
+                                left,
+                                top,
+                                width / 3,
+                                height
+                            ) < 0.5,
+                            right = getLuminanceForView(
+                                scaledBitmap,
+                                offsetX,
+                                offsetY,
+                                left + width * 2 / 3,
+                                top,
+                                width / 3,
+                                height
+                            ) < 0.5,
+                        )
+                    }
+                    return
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        lastTimeImage = 0L
+        root.setBackgroundColor(Color.WHITE)
+        timeClock.setTextColor(Color.BLACK)
+        dateClock.setTextColor(Color.BLACK)
+        notificationIconView.adjustToLighten = false
+        batteryIndicator.setWhite(left = false, right = false)
+    }
 }
 
 private fun getLuminanceForView(bitmap: Bitmap, offsetX: Int, offsetY: Int, viewLeft: Int, viewTop: Int, viewWidth: Int, viewHeight: Int): Float {
@@ -113,91 +207,6 @@ private fun getLuminanceForView(bitmap: Bitmap, offsetX: Int, offsetY: Int, view
 private fun View.getLuminance(bitmap: Bitmap, offsetX: Int, offsetY: Int) =
     getLuminanceForView(bitmap, offsetX, offsetY, left, top, width, height)
 
-private fun AodLayoutBinding.loadBackgroundImage(ctx: Context) {
-    val file = File(ctx.filesDir, "bg_image")
-
-    if (file.exists()) {
-        try {
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-            if (bitmap != null) {
-                val viewWidth = root.width
-                val viewHeight = root.height
-                var offsetX = 0
-                var offsetY = 0
-                val scaledBitmap = if(viewWidth * bitmap.height < bitmap.width * viewHeight){
-                    val newWidth = viewHeight * bitmap.width / bitmap.height
-                    offsetX = (newWidth - viewWidth) / 2
-                    Bitmap.createScaledBitmap(
-                        bitmap,
-                        newWidth,
-                        viewHeight,
-                        true
-                    )
-                } else {
-                    val newHeight = viewWidth * bitmap.height / bitmap.width
-                    offsetY = (newHeight - viewHeight) / 2
-                    Bitmap.createScaledBitmap(
-                        bitmap,
-                        viewWidth,
-                        newHeight,
-                        true
-                    )
-                }
-
-
-                val scaledDrawable = BitmapDrawable(ctx.resources, scaledBitmap)
-
-                scaledDrawable.gravity = Gravity.CENTER
-                root.background = scaledDrawable
-
-                timeClock.setTextColor(
-                    if(timeClock.getLuminance(scaledBitmap, offsetX, offsetY) > 0.5)
-                        Color.BLACK
-                    else
-                        Color.WHITE
-                )
-                dateClock.setTextColor(
-                    if(dateClock.getLuminance(scaledBitmap, offsetX, offsetY) > 0.5)
-                        Color.BLACK
-                    else
-                        Color.WHITE
-                )
-                notificationIconView.adjustToLighten = notificationIconView.getLuminance(scaledBitmap, offsetX, offsetY) < 0.5
-
-                batteryIndicator.run {
-                    batteryIndicator.setWhite(
-                        left = getLuminanceForView(
-                            scaledBitmap,
-                            offsetX,
-                            offsetY,
-                            left,
-                            top,
-                            width / 3,
-                            height
-                        ) < 0.5,
-                        right = getLuminanceForView(
-                            scaledBitmap,
-                            offsetX,
-                            offsetY,
-                            left + width * 2 / 3,
-                            top,
-                            width / 3,
-                            height
-                        ) < 0.5,
-                    )
-                }
-                return
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-    root.setBackgroundColor(Color.WHITE)
-    timeClock.setTextColor(Color.BLACK)
-    dateClock.setTextColor(Color.BLACK)
-    notificationIconView.adjustToLighten = false
-    batteryIndicator.setWhite(left = false, right = false)
-}
 
 private fun AodLayoutBinding.updateExtraViewVisibility(ctx: Context) {
     if (!PreferenceManager.getDefaultSharedPreferences(ctx).getBoolean("overlay_chess", false)) {

@@ -135,6 +135,13 @@
             app:key="remove_aod_bg"
             android:dependency="disable_overlay_aod"
             app:title="Remove Background for AOD" />
+
+
+        <Preference
+            app:key="request_all_file"
+            android:dependency="disable_overlay_aod"
+            app:title="Request All File Access"
+            app:summary="The background file will be saved in folder accessible for other apps like KOReader" />
     </PreferenceCategory>
 
 </PreferenceScreen>
