@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/darker_gray" />
+    <item android:drawable="@drawable/baseline_music_note_24" android:top="8dp" android:bottom="8dp" android:left="8dp" android:right="8dp" />
+</layer-list>

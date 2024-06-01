@@ -14,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.graphics.drawable.Drawable
 import android.media.AudioManager
 import android.media.AudioPlaybackConfiguration
 import android.media.MediaMetadata
@@ -28,6 +29,9 @@ import android.util.AttributeSet
 import android.util.Log
 import android.util.TypedValue
 import android.view.View
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
+import com.lmqr.ha9_comp_service.R
 import java.util.LinkedList
 import kotlin.math.max
 import kotlin.math.min
@@ -70,11 +74,11 @@ class MusicView @JvmOverloads constructor(
             context.resources.displayMetrics)
     }
 
-    private val contrastMultiplier = 0.85f
+    private val contrastMultiplier = 0.9f
     private val redValue = 0.3086f * contrastMultiplier
     private val greenValue = 0.6094f * contrastMultiplier
     private val blueValue = 0.0820f * contrastMultiplier
-    private val shiftColor = 55f
+    private val shiftColor = 20f
 
     private val albumPaint: Paint = Paint().apply {
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply {
@@ -124,10 +128,8 @@ class MusicView @JvmOverloads constructor(
                 pendingUpdate = true
                 handler.postDelayed({
                     pendingUpdate = false
-                    handler.postDelayed({
-                        retrieveAndSetMetadata()
-                    }, 100)
-                }, 300)
+                    retrieveAndSetMetadata()
+                }, 400)
             }
         }
     }
@@ -138,13 +140,16 @@ class MusicView @JvmOverloads constructor(
         return flat != null && flat.contains(cn.flattenToString())
     }
 
-    private fun retrieveAndSetMetadata() {
+    private var baseSongDrawable: Drawable? = null
+
+    private fun retrieveAndSetMetadata(retriesLeft: Int = 7) {
         if(!mediaCallbackRegistered)
             return
 
         val controllers = mediaSessionManager.getActiveSessions(
             ComponentName(context, NotificationListener::class.java)
         )
+        var shouldRetry = false
 
         synchronized(this@MusicView) {
             musicState =
@@ -154,16 +159,26 @@ class MusicView @JvmOverloads constructor(
                     val totalDuration = (metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L)
                     val currentPosition = (playbackState?.position ?: 0L)
                     val playbackSpeed = max((playbackState?.playbackSpeed ?: 1f), 0.1f)
+                    val side = max(width, height)
+                    val retrievedAlbumArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                    shouldRetry = retrievedAlbumArt == null
 
                     MusicState(
-                        albumArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART),
+                        albumArt = retrievedAlbumArt?:baseSongDrawable?.toBitmap(side, side),
                         title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "",
                         artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "",
                         isPlaying = controller.isPlaying(),
                         length = ((totalDuration - currentPosition) / playbackSpeed).toLong()
                     )
                 } ?: MusicState()
+            if(shouldRetry && retriesLeft in 1..10){
+                pendingUpdate = true
+                handler.postDelayed({
+                    pendingUpdate = false
+                    retrieveAndSetMetadata(retriesLeft - 1)
+                }, 200)
+            }
         }
     }
 
@@ -238,8 +253,8 @@ class MusicView @JvmOverloads constructor(
                     shaderPaint.shader = RadialGradient(
                         centerX, centerY, radius,
                         intArrayOf(
-                            Color.argb(0.02f, 0f, 0f, 0f),
-                            Color.argb(0.15f, 0f, 0f, 0f),
+                            Color.argb(0.02f, 0.1f, 0.1f, 0.1f),
+                            Color.argb(0.1f, 0f, 0f, 0f),
                         ),
                         null,
                         Shader.TileMode.CLAMP
@@ -285,12 +300,12 @@ class MusicView @JvmOverloads constructor(
                 pendingUpdate = true
                 handler.postDelayed({
                     pendingUpdate = false
-                    handler.postDelayed({
-                        retrieveAndSetMetadata()
-                    }, 100)
-                }, 300)
+                    retrieveAndSetMetadata()
+                }, 400)
             } else {
-                musicState = MusicState()
+                synchronized(this) {
+                    musicState = MusicState()
+                }
             }
         }
     }
@@ -333,6 +348,7 @@ class MusicView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        baseSongDrawable = ContextCompat.getDrawable(context, R.drawable.empty_music_box)
         if (isNotificationListenerEnabled()) {
             initMediaControllerCallbacks()
         }
