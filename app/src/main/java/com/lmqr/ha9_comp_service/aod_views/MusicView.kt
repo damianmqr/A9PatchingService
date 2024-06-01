@@ -3,6 +3,7 @@ package com.lmqr.ha9_comp_service.aod_views
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
+import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -31,7 +32,9 @@ import android.util.TypedValue
 import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.R
+import java.lang.NumberFormatException
 import java.util.LinkedList
 import kotlin.math.max
 import kotlin.math.min
@@ -129,10 +132,12 @@ class MusicView @JvmOverloads constructor(
                 handler.postDelayed({
                     pendingUpdate = false
                     retrieveAndSetMetadata()
-                }, 400)
+                }, 500)
             }
         }
     }
+
+    private var sharedPreferences: SharedPreferences? = null
 
     private fun isNotificationListenerEnabled(): Boolean {
         val cn = ComponentName(context, NotificationListener::class.java)
@@ -142,6 +147,10 @@ class MusicView @JvmOverloads constructor(
 
     private var baseSongDrawable: Drawable? = null
 
+    private val hideViewRunnable = Runnable {
+        musicState = MusicState()
+    }
+
     private fun retrieveAndSetMetadata(retriesLeft: Int = 7) {
         if(!mediaCallbackRegistered)
             return
@@ -149,36 +158,59 @@ class MusicView @JvmOverloads constructor(
         val controllers = mediaSessionManager.getActiveSessions(
             ComponentName(context, NotificationListener::class.java)
         )
-        var shouldRetry = false
 
         synchronized(this@MusicView) {
-            musicState =
-                controllers.firstOrNull(MediaController::isActive)?.let { controller ->
-                    val metadata = controller.metadata
-                    val playbackState = controller.playbackState
-                    val totalDuration = (metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L)
-                    val currentPosition = (playbackState?.position ?: 0L)
-                    val playbackSpeed = max((playbackState?.playbackSpeed ?: 1f), 0.1f)
-                    val side = max(width, height)
-                    val retrievedAlbumArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                        ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                    shouldRetry = retrievedAlbumArt == null
+            controllers.firstOrNull(MediaController::isActive)?.run {
+                val metadata = metadata
+                val playbackState = playbackState
+                val totalDuration = (metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L)
+                val currentPosition = (playbackState?.position ?: 0L)
+                val playbackSpeed = max((playbackState?.playbackSpeed ?: 1f), 0.1f)
+                val side = max(width, height)
+                val retrievedAlbumArt = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                val isPlaying = isPlaying()
+                val shouldRetry = retrievedAlbumArt == null
 
-                    MusicState(
-                        albumArt = retrievedAlbumArt?:baseSongDrawable?.toBitmap(side, side),
-                        title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "",
-                        artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "",
-                        isPlaying = controller.isPlaying(),
-                        length = ((totalDuration - currentPosition) / playbackSpeed).toLong()
-                    )
-                } ?: MusicState()
-            if(shouldRetry && retriesLeft in 1..10){
-                pendingUpdate = true
-                handler.postDelayed({
-                    pendingUpdate = false
-                    retrieveAndSetMetadata(retriesLeft - 1)
-                }, 200)
+                handler.removeCallbacks(hideViewRunnable)
+                if(!isPlaying){
+                    try {
+                        val timeout = sharedPreferences?.getString(
+                            "music_view_timeout",
+                            "-1"
+                        )?.let {
+                            Integer.parseInt(
+                                it
+                            )
+                        }?:-1
+
+                        if(timeout == 0) {
+                            musicState = MusicState()
+                            return
+                        } else if(timeout > 0) {
+                            handler.postDelayed(hideViewRunnable, timeout * 60 * 1000L)
+                        }
+                    } catch (e: NumberFormatException) {
+                        e.printStackTrace()
+                    }
+                }
+                musicState = MusicState(
+                    albumArt = retrievedAlbumArt?:baseSongDrawable?.toBitmap(side, side),
+                    title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "",
+                    artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "",
+                    isPlaying = isPlaying,
+                    length = ((totalDuration - currentPosition) / playbackSpeed).toLong()
+                )
+                if(shouldRetry && retriesLeft in 1..10){
+                    pendingUpdate = true
+                    handler.postDelayed({
+                        pendingUpdate = false
+                        retrieveAndSetMetadata(retriesLeft - 1)
+                    }, 200)
+                }
+                return
             }
+            musicState = MusicState()
         }
     }
 
@@ -301,7 +333,7 @@ class MusicView @JvmOverloads constructor(
                 handler.postDelayed({
                     pendingUpdate = false
                     retrieveAndSetMetadata()
-                }, 400)
+                }, 500)
             } else {
                 synchronized(this) {
                     musicState = MusicState()
@@ -349,6 +381,7 @@ class MusicView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         baseSongDrawable = ContextCompat.getDrawable(context, R.drawable.empty_music_box)
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         if (isNotificationListenerEnabled()) {
             initMediaControllerCallbacks()
         }
