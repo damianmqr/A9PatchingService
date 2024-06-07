@@ -21,6 +21,15 @@
             app:dialogTitle="Choose an action for double press" />
 
         <ListPreference
+            app:key="long_press_eink_action"
+            app:title="Long Press Action"
+            app:summary="Select an action for long button press"
+            app:entries="@array/button_action_entries"
+            app:entryValues="@array/button_action_values"
+            app:defaultValue="dummy"
+            app:dialogTitle="Choose an action for long press" />
+
+        <ListPreference
             app:key="single_press_eink_action_screen_off"
             app:title="Single Press Action (Screen off)"
             app:summary="Select an action for single button press when screen is off"
@@ -38,6 +47,14 @@
             app:defaultValue="dummy"
             app:dialogTitle="Choose an action for double press when screen is off" />
 
+        <ListPreference
+            app:key="long_press_eink_action_screen_off"
+            app:title="Long Press Action (Screen off)"
+            app:summary="Select an action for long button press when screen is off"
+            app:entries="@array/button_action_entries_screen_off"
+            app:entryValues="@array/button_action_values_screen_off"
+            app:defaultValue="dummy"
+            app:dialogTitle="Choose an action for long press when screen is off" />
 
         <SwitchPreferenceCompat
             app:key="disable_nightmode"

@@ -131,46 +131,37 @@ class A9AccessibilityService : AccessibilityService(),
 
     }
 
-    private var lastClickTime: Long = 0
+    private val hardwareGestureDetector = HardwareGestureDetector(
+        object: HardwareGestureDetector.OnGestureListener{
+            override fun onSinglePress() {
+                if(isScreenOn)
+                    buttonActionManager.executeSinglePress(this@A9AccessibilityService)
+                else
+                    buttonActionManager.executeSinglePressScreenOff(this@A9AccessibilityService)
+            }
 
-    private fun handleSinglePress() {
-        if(isScreenOn)
-            buttonActionManager.executeSinglePress(this)
-        else
-            buttonActionManager.executeSinglePressScreenOff(this)
-    }
+            override fun onDoublePress() {
+                if(isScreenOn)
+                    buttonActionManager.executeDoublePress(this@A9AccessibilityService)
+                else
+                    buttonActionManager.executeDoublePressScreenOff(this@A9AccessibilityService)
+            }
 
-    private fun handleDoublePress() {
-        if(isScreenOn)
-            buttonActionManager.executeDoublePress(this)
-        else
-            buttonActionManager.executeDoublePressScreenOff(this)
-    }
-
-    private val singlePressRunnable = Runnable {
-        handleSinglePress()
-    }
+            override fun onLongPress() {
+                if(isScreenOn)
+                    buttonActionManager.executeLongPress(this@A9AccessibilityService)
+                else
+                    buttonActionManager.executeLongPressScreenOff(this@A9AccessibilityService)
+            }
+        }
+    )
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            when (event.scanCode) {
-                766 -> {
-                    if (!Settings.canDrawOverlays(baseContext))
-                        requestOverlayPermission()
-                    else {
-
-                        val clickTime: Long = System.currentTimeMillis()
-                        if (clickTime - lastClickTime < 350) {
-                            handler.removeCallbacks(singlePressRunnable)
-                            handleDoublePress()
-                        } else {
-                            handler.postDelayed(singlePressRunnable, 350)
-                        }
-                        lastClickTime = clickTime
-                    }
-                    return true
-                }
-            }
+        if(event.scanCode == 766){
+            if (!Settings.canDrawOverlays(baseContext))
+                    requestOverlayPermission()
+            else
+                hardwareGestureDetector.onKeyEvent(event.action, event.eventTime)
         }
         return super.onKeyEvent(event)
     }

@@ -14,12 +14,20 @@ class ButtonActionManager(commandRunner: CommandRunner) {
         "aod_action" to PerformAODExtraButtonAction(),
     ).withDefault { DummyButtonAction() }
 
+    fun executeLongPress(context: Context){
+        buttonCommands[PreferenceManager.getDefaultSharedPreferences(context).getString("long_press_eink_action", "dummy")]?.execute(context)
+    }
+
     fun executeDoublePress(context: Context){
         buttonCommands[PreferenceManager.getDefaultSharedPreferences(context).getString("double_press_eink_action", "open_menu")]?.execute(context)
     }
 
     fun executeSinglePress(context: Context){
         buttonCommands[PreferenceManager.getDefaultSharedPreferences(context).getString("single_press_eink_action", "clear")]?.execute(context)
+    }
+
+    fun executeLongPressScreenOff(context: Context){
+        buttonCommands[PreferenceManager.getDefaultSharedPreferences(context).getString("long_press_eink_action_screen_off", "dummy")]?.execute(context)
     }
 
     fun executeDoublePressScreenOff(context: Context){
