@@ -32,6 +32,8 @@
         <item>Next Track</item>
         <item>Toggle Music</item>
         <item>Go Back</item>
+        <item>Home</item>
+        <item>Recent Apps</item>
         <item>Open Menu</item>
         <item>Nothing</item>
     </string-array>
@@ -40,6 +42,8 @@
         <item>next_track</item>
         <item>toggle_music</item>
         <item>back</item>
+        <item>home</item>
+        <item>recents</item>
         <item>open_menu</item>
         <item>dummy</item>
     </string-array>
