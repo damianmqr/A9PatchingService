@@ -10,6 +10,8 @@ class ButtonActionManager(commandRunner: CommandRunner) {
         "next_track" to NextTrackButtonAction(),
         "toggle_music" to TogglePauseButtonAction(),
         "back" to BackButtonAction(),
+        "home" to HomeButtonAction(),
+        "recents" to RecentsButtonAction(),
         "open_menu" to ToggleMenuButtonAction(),
         "aod_action" to PerformAODExtraButtonAction(),
     ).withDefault { DummyButtonAction() }
