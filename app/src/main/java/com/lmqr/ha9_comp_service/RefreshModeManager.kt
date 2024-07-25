@@ -23,7 +23,14 @@ class RefreshModeManager(
         private set(v) {
             field = v; applyMode()
         }
+    init {
+        currentMode = RefreshMode.fromInt(defaultRefreshMode())
+    }
     private var currentClassifier = ""
+
+    private fun defaultRefreshMode() = (sharedPreferences.getString("refresh_setting", "2")
+        ?.let { Integer.parseInt(it) }
+        ?: RefreshMode.SMOOTH) as Int
     fun onAppChange(packageName: String) = packageName.run {
         if (this != currentClassifier) {
             currentClassifier = this
@@ -35,9 +42,7 @@ class RefreshModeManager(
                             false
                         )
                     ),
-                    sharedPreferences.getString("refresh_setting", "2")
-                        ?.let { Integer.parseInt(it) }
-                        ?: 2
+                    defaultRefreshMode()
                 )
             )
             if (tempMode != currentMode) {
@@ -61,10 +66,11 @@ class RefreshModeManager(
         }
     }
 
-    private fun applyMode() =
+    private fun applyMode() {
         commandRunner.runCommands(
             arrayOf(currentMode.command)
         )
+    }
 }
 
 private fun String.toSharedPreferencesKey(isPerAppEnabled: Boolean): String {
