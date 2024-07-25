@@ -54,9 +54,9 @@ class MountImage:
         logging.info(f"Unmounted {self.image_path} from {self.mount_point}")
 
 
-def generate_pattern_smali_code(property_name, pattern_seq, pattern_loop, do_open=False):
+def generate_pattern_smali_code(property_name, property_value, pattern_seq, pattern_loop, do_open=False):
     init_rc_lines = [
-        f'on property:{property_name}=set\n'
+        f'on property:{property_name}={property_value}\n'
     ]
 
     if not do_open:
@@ -80,13 +80,13 @@ def generate_pattern_smali_code(property_name, pattern_seq, pattern_loop, do_ope
         init_rc_lines.extend([
             '    write /sys/class/leds/vibrator/reg "0x13 0x0f"\n'
         ])
-    
+
     smali_code = [
         '    const-string {reg1}, "' + property_name + '"\n',
-        '    const-string {reg2}, "set"\n',
+        '    const-string {reg2}, "' + property_value + '"\n',
         '    invoke-static {{{reg1}, {reg2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V\n'
     ]
-    
+
     return ''.join(init_rc_lines), ''.join(smali_code)
 
 
@@ -186,6 +186,7 @@ def patch_vibrator_service(smali_file_path, init_file_path):
 
     ring_pattern_init, ring_pattern_smali = generate_pattern_smali_code(
         property_name = "sys.linevibrator_on",
+        property_value = "1",
         pattern_seq = [
             "0x04", "0x04", "0x04", "0x04", "0x04", "0x05", "0x05", "0x05",
         ],
@@ -196,7 +197,8 @@ def patch_vibrator_service(smali_file_path, init_file_path):
     )
 
     notification_pattern_init, notification_pattern_smali = generate_pattern_smali_code(
-        property_name = "sys.linevibrator_short",
+        property_name = "sys.linevibrator_on",
+        property_value = "2",
         pattern_seq = [
             "0x04", "0x05", "0x04", "0x04", "0x04", "0x05", "0x05", "0x05"
         ],
@@ -207,7 +209,8 @@ def patch_vibrator_service(smali_file_path, init_file_path):
     )
 
     touch_pattern_init, touch_pattern_smali = generate_pattern_smali_code(
-        property_name = "sys.linevibrator_type",
+        property_name = "sys.linevibrator_on",
+        property_value = "3",
         pattern_seq = [
             "0x01", "0x00"
         ],
@@ -259,7 +262,7 @@ def patch_vibrator_service(smali_file_path, init_file_path):
     :usage_alarm
     :usage_ringtone
     :usage_communication_request
-    
+
     :try_start_ring
 {ring_pattern_smali.format(reg1='v0', reg2='v1')}
 
@@ -311,7 +314,7 @@ def patch_vibrator_service(smali_file_path, init_file_path):
 
     with open(init_file_path, "r") as file:
         init_lines = file.readlines()
-    
+
     with open(init_file_path, "w") as file:
         for line in init_lines:
             file.write(line)
@@ -401,6 +404,163 @@ def update_build_prop():
             if key not in set([line.split("=")[0] for line in lines]):
                 file.write(f"{key}={value}\n")
 
+def patch_brightness_setting(smali_file_path):
+    logging.info("Patching BrightnessSetting...")
+
+    with open(smali_file_path, 'r') as file:
+        contents = file.readlines()
+
+    new_contents = []
+
+    inside_method = False
+    inside_internal_method = False
+    inside_constructor = False
+    iput_pattern = re.compile(r'\s*iput (\w+), (\w+), (L[\w/]+;->mLeadDisplayId:I\s+)')
+    found_field = False
+    class_pattern = re.compile(r'\s*.class\s*[a-z]*\s+([a-zA-Z0-9\/\$]+;)\s*')
+    class_name = None
+    locals_pattern = re.compile(r'^(\s*\.locals\s+)(\d+)(\s*)$')
+    locals_count = 0
+    brightness_invoke_pattern = re.compile(r'\s*invoke-virtual\s*\{\s*([pv]\d+),\s*([pv]\d+),\s*([pv]\d+),\s*([pv]\d+).*\},\s*L.*;->onBrightnessChanged\(FFI\)V\s*')
+
+    for line in contents:
+        if class_name is None:
+            class_match = class_pattern.match(line)
+            if class_match:
+                class_name = class_match.group(1)
+
+        new_contents.append(line)
+        if not found_field and ".field private" in line and ":F" in line:
+            found_field = True
+            new_contents.append('\n.field private mChangedBrightnessValue:F\n\n')
+
+        if ".method constructor" in line:
+            inside_constructor = True
+        elif not inside_internal_method and ".method" in line and "updatePowerStateInternal()V" in line:
+            inside_internal_method = True
+        elif not inside_method and ".method" in line and "updatePowerState()V" in line:
+            inside_method = True
+        elif ".end method" in line:
+            inside_constructor = False
+            inside_internal_method = False
+            inside_method = False
+        elif inside_internal_method:
+            brightness_invoke_match = brightness_invoke_pattern.match(line)
+            if brightness_invoke_match:
+                r1 = brightness_invoke_match.group(2)
+                r2 = brightness_invoke_match.group(1)
+                new_contents.append(f'    move-object/from16 {r2}, p0\n')
+                new_contents.append(f'    iput {r1}, {r2}, {class_name}->mChangedBrightnessValue:F\n')
+        elif inside_method:
+            locals_match = locals_pattern.match(line)
+            if locals_match:
+                locals_count = int(locals_match.group(2))
+                new_contents[-1]=f"{locals_match.group(1)}{locals_count + 6}{locals_match.group(3)}\n"
+            if 'invoke' in line and ';->updatePowerStateInternal()V' in line:
+                max_brightness_value = "0x44c80000"
+
+                r1 = f'v{locals_count}'
+                r2 = f'v{locals_count + 1}'
+                r3 = f'v{locals_count + 2}'
+                r4 = f'v{locals_count + 3}'
+                r5 = f'v{locals_count + 4}'
+                r6 = f'v{locals_count + 5}'
+
+                new_contents.extend([
+                    f'    iget-object {r1}, p0, {class_name}->mCdsi:Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;\n',
+                    f'    invoke-virtual {{{r1}}}, Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;->getColorTemperature()F\n',
+                    f'    move-result {r2}\n',
+
+                    f'    iget {r3}, p0, {class_name}->mChangedBrightnessValue:F\n',
+                    f'    const {r4}, {max_brightness_value}\n',
+                    f'    mul-float {r3}, {r3}, {r4}\n', # r3 = mChangedBrightnessValue * MAX
+
+                    f'    mul-float {r5}, {r3}, {r2}\n', # r5 = mChangedBrightnessValue * MAX * getColorTemperature()F
+                    f'    float-to-int {r5}, {r5}\n'
+
+                    f'    const {r6}, 0x3f800000\n', # 1.0f
+                    f'    sub-float {r6}, {r6}, {r2}\n', # r6 = 1.0f - getColorTemperature()F
+                    f'    mul-float {r6}, {r3}, {r6}\n', # r6 = mChangedBrightnessValue * MAX * (1.0f - getColorTemperature()F)
+                    f'    float-to-int {r6}, {r6}\n'
+
+                    f'    new-instance {r2}, Ljava/lang/StringBuilder;\n',
+                    f'    invoke-direct {{{r2}}}, Ljava/lang/StringBuilder;-><init>()V\n',
+                    f'    invoke-virtual {{{r2}, {r5}}}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;\n',
+                    f'    invoke-virtual {{{r2}}}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;\n',
+                    f'    move-result-object {r2}\n',
+                    f'    const-string {r1}, "sys.linevibrator_short"\n',
+                    f'    invoke-static {{{r1}, {r2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V\n',
+
+                    f'    new-instance {r2}, Ljava/lang/StringBuilder;\n',
+                    f'    invoke-direct {{{r2}}}, Ljava/lang/StringBuilder;-><init>()V\n',
+                    f'    invoke-virtual {{{r2}, {r6}}}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;\n',
+                    f'    invoke-virtual {{{r2}}}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;\n',
+                    f'    move-result-object {r2}\n',
+                    f'    const-string {r1}, "sys.linevibrator_open"\n',
+                    f'    invoke-static {{{r1}, {r2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V\n'
+                ])
+        elif inside_constructor:
+            iput_match = iput_pattern.match(line)
+            if iput_match:
+                r1, r2 = iput_match.group(1), iput_match.group(2)
+                new_contents.append(f'    const/4 {r1}, 0x0\n')
+                new_contents.append(f'    iput {r1}, {r2}, {class_name}->mChangedBrightnessValue:F\n')
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+def patch_color_display_service_internal(smali_file_path):
+    logging.info("Patching DisplayService...")
+
+    with open(smali_file_path, "r") as f:
+        contents = f.readlines()
+
+    class_pattern = re.compile(r'\s*.class\s*[a-z]*\s+([a-zA-Z0-9\/\$]+);\s*')
+    class_name = None
+    locals_pattern = re.compile(r'^(\s*\.locals\s+)(\d+)(\s*)$')
+    locals_count = 0
+    brightness_invoke_pattern = re.compile(r'\s*invoke-virtual\s*\{\s*([pv]\d+),\s*([pv]\d+),\s*([pv]\d+),\s*([pv]\d+).*\},\s*L.*;->onBrightnessChanged\(FFI\)V\s*')
+
+    for line in contents:
+        class_match = class_pattern.match(line)
+        if class_match:
+            class_name = class_match.group(1)
+            break
+
+    base_class_name = class_name.split('$')[0]
+    contents.extend([
+        '.method public getColorTemperature()F\n',
+        '    .locals 4\n',
+        f'    iget-object v0, p0, {class_name};->this$0:{base_class_name};\n',
+        f'    invoke-static {{v0}}, {base_class_name};->-$$Nest$fgetmNightDisplayTintController({base_class_name};){base_class_name}$NightDisplayTintController;\n',
+        '    move-result-object v0\n',
+        f'    invoke-virtual {{v0}}, {base_class_name}$NightDisplayTintController;->isActivated()Z\n',
+        '    move-result v1\n',
+        '    if-nez v1, :cond_activated\n',
+        '    const v0, 0x3f800000\n',
+        '    goto :return_value\n',
+        ':cond_activated\n',
+        f'    invoke-virtual {{v0}}, {base_class_name}$NightDisplayTintController;->getColorTemperature()I\n',
+        '    move-result v0\n',
+        '    const v1, 0x457f2000\n',
+        '    const v2, 0x45224000\n',
+        '    int-to-float v3, v0\n',
+        '    sub-float v3, v3, v2\n',
+        '    sub-float v1, v1, v2\n',
+        '    div-float v0, v3, v1\n',
+        ':return_value\n',
+        '    return v0\n',
+        '.end method\n'
+    ])
+
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(contents)
+
+    logging.info("Patching complete.")
+
 def replace_treble_app():
     logging.info("Replacing TrebleApp...")
     treble_apk = "d/system/priv-app/TrebleApp/TrebleApp.apk"
@@ -450,7 +610,13 @@ def update_vndk_rc():
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/service call SurfaceFlinger 1008 i32 1\n",
         "    start a9_eink_server\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/settings put secure enabled_accessibility_services com.lmqr.ha9_comp_service/.A9AccessibilityService\n",
-        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/appops set com.lmqr.ha9_comp_service SYSTEM_ALERT_WINDOW allow\n"
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/appops set com.lmqr.ha9_comp_service SYSTEM_ALERT_WINDOW allow\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chmod 444 /sys/class/leds/aw99703-bl-1/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chmod 444 /sys/class/leds/aw99703-bl-2/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/aw99703-bl-1/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/aw99703-bl-2/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-1/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-2/brightness\n"
     ]
 
     found_boot_completed = False
@@ -458,7 +624,7 @@ def update_vndk_rc():
     with open(vndk_rc_path, "w") as file:
         if not any("service a9_eink_server /system/bin/a9_eink_server" in line for line in lines):
             file.write("service a9_eink_server /system/bin/a9_eink_server\n    disabled\n\n")
-        
+
         for line in lines:
             file.write(line)
             if not found_boot_completed and "on property:sys.boot_completed=1" in line:
@@ -466,6 +632,15 @@ def update_vndk_rc():
                 for entry in service_entries:
                     if entry not in lines:
                         file.write(entry)
+
+        if not any("on property:sys.linevibrator_open=*" in line for line in lines):
+            file.write("\non property:sys.linevibrator_open=*\n")
+            file.write("    write /sys/class/backlight/aw99703-bl-1/brightness ${sys.linevibrator_open}\n\n")
+
+
+        if not any("on property:sys.linevibrator_short=*" in line for line in lines):
+            file.write("\non property:sys.linevibrator_short=*\n")
+            file.write("    write /sys/class/backlight/aw99703-bl-2/brightness ${sys.linevibrator_short}\n\n")
 
 def patch_services_jar():
     jar_file = "d/system/framework/services.jar"
@@ -493,14 +668,30 @@ def patch_services_jar():
 
     for smali_file in smali_files:
         patch_vibration_scaler(smali_file)
-    
+
     smali_files = find_smali(temp_dir, ['^BatterySaverPolicy(\$.*|)\.smali$'])
     if len(smali_files) == 0:
         logging.error("BatterySaverPolicy.smali not found!")
         exit_now(1)
-    
+
     for smali_file in smali_files:
         patch_battery_saver(smali_file)
+
+    smali_files = find_smali(temp_dir, ["DisplayPowerController.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("DisplayBrightnessController.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_brightness_setting(smali_file)
+
+    smali_files = find_smali(temp_dir, ["ColorDisplayService\$.*[Ii]nternal.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("ColorDisplayService.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_color_display_service_internal(smali_file)
 
     logging.info("Repacking services.jar...")
     try:
