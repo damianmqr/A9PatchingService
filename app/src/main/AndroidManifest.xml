@@ -48,17 +48,6 @@
         </service>
 
         <service
-            android:name=".quick_settings.NightModeTile"
-            android:exported="true"
-            android:label="Night Mode"
-            android:icon="@drawable/baseline_moon_24_white"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
-        <service
             android:name=".quick_settings.LaunchSettingsTile"
             android:exported="true"
             android:label="E-Ink settings"

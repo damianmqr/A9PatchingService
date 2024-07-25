@@ -56,20 +56,6 @@
             app:defaultValue="dummy"
             app:dialogTitle="Choose an action for long press when screen is off" />
 
-        <SwitchPreferenceCompat
-            app:key="disable_nightmode"
-            app:disableDependentsState="true"
-            app:summaryOff="Disable toggle for nightmode, the screen will only use white light"
-            app:summaryOn="Enable nightmode toggle in menu"
-            app:title="Disable Nightmode" />
-
-        <SwitchPreferenceCompat
-            app:key="temperature_slider"
-            app:dependency="disable_nightmode"
-            app:summary="Enable slider in place of toggle"
-            app:title="Enable Temperature Slider" />
-
-
     </PreferenceCategory>
 
 

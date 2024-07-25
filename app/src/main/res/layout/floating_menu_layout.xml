@@ -71,37 +71,5 @@
             android:layout_height="35dp"
             android:text="@string/speed"/>
     </LinearLayout>
-    <Switch
-        android:id="@+id/night_switch"
-        style="@style/DayNightSwitchStyle"
-        android:layout_marginTop="5dp"
-        android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:paddingHorizontal="7dp"
-        android:paddingVertical="2dp"
-        android:textSize="15sp"
-        android:text="@string/night_mode" />
-    <LinearLayout
-        android:id="@+id/light_seekbar_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_gravity="center"
-        android:paddingVertical="4dp">
-        <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/baseline_moon_24"/>
-        <SeekBar
-            android:id="@+id/light_seekbar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:paddingVertical="5dp"
-            android:thumbTint="@color/black"/>
-        <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/baseline_brightness_high_24_dark" />
-    </LinearLayout>
+
 </LinearLayout>
