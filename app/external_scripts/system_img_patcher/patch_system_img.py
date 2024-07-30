@@ -561,6 +561,97 @@ def patch_color_display_service_internal(smali_file_path):
 
     logging.info("Patching complete.")
 
+def patch_color_display_service_night_controller(smali_file_path):
+    logging.info("Patching DisplayService...")
+
+    with open(smali_file_path, "r") as f:
+        contents = f.readlines()
+    new_contents = []
+
+    class_pattern = re.compile(r'\s*.class\s*[a-z]*\s+([a-zA-Z0-9\/\$]+;)\s*')
+    class_name = None
+    locals_pattern = re.compile(r'^(\s*\.locals\s+)(\d+)(\s*)$')
+    inside_method = False
+
+    for line in contents:
+        new_contents.append(line)
+        class_match = class_pattern.match(line)
+        if class_match:
+            class_name = class_match.group(1)
+        if ".method" in line and "onColorTemperatureChanged" in line:
+            inside_method = True
+        elif ".end method" in line:
+            inside_method = False
+        elif inside_method:
+            locals_match = locals_pattern.match(line)
+            if locals_match:
+                locals_count = int(locals_match.group(2))
+                new_contents[-1]=f"{locals_match.group(1)}{locals_count + 7}{locals_match.group(3)}\n"
+                r0 = f"v{locals_count}"
+                r1 = f"v{locals_count + 1}"
+                r2 = f"v{locals_count + 2}"
+                r3 = f"v{locals_count + 3}"
+                r4 = f"v{locals_count + 4}"
+                r5 = f"v{locals_count + 5}"
+                r6 = f"v{locals_count + 6}"
+
+                new_contents.extend([
+                    f'    invoke-virtual {{p0}}, {class_name}->isActivated()Z\n',
+                    f'    move-result {r0}\n',
+                    f'    if-nez {r0}, :cond_activated_int\n',
+                    f'    const {r1}, 0x3f800000\n',
+                    '    goto :return_value_int\n',
+                    ':cond_activated_int\n',
+                    f'    move {r1}, p1\n',
+                    f'    const {r0}, 0x457f2000\n',
+                    f'    const {r2}, 0x45224000\n',
+                    f'    int-to-float {r3}, {r1}\n',
+                    f'    sub-float {r3}, {r3}, {r2}\n',
+                    f'    sub-float {r0}, {r0}, {r2}\n',
+                    f'    div-float {r1}, {r3}, {r0}\n',
+                    ':return_value_int\n',
+
+                    f'    const-string {r3}, "sys.linevibrator_short"\n',
+                    f'    invoke-static {{{r3}}}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;\n',
+                    f'    move-result-object {r3}\n',
+                    f'    invoke-static {{{r3}}}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I\n',
+                    f'    move-result {r3}\n',
+
+                    f'    const-string {r4}, "sys.linevibrator_open"\n',
+                    f'    invoke-static {{{r4}}}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;\n',
+                    f'    move-result-object {r4}\n',
+                    f'    invoke-static {{{r4}}}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I\n',
+                    f'    move-result {r4}\n',
+
+                    f'    add-int {r5}, {r3}, {r4}\n', # total_brightness = white + yellow
+
+                    f'    int-to-float {r6}, {r5}\n',
+                    f'    mul-float {r6}, {r6}, {r1}\n',
+                    f'    float-to-int {r6}, {r6}\n',
+
+                    f'    new-instance {r2}, Ljava/lang/StringBuilder;\n',
+                    f'    invoke-direct {{{r2}}}, Ljava/lang/StringBuilder;-><init>()V\n',
+                    f'    invoke-virtual {{{r2}, {r6}}}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;\n',
+                    f'    invoke-virtual {{{r2}}}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;\n',
+                    f'    move-result-object {r2}\n',
+                    f'    const-string {r1}, "sys.linevibrator_short"\n',
+                    f'    invoke-static {{{r1}, {r2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V\n',
+
+                    f'    new-instance {r2}, Ljava/lang/StringBuilder;\n',
+                    f'    invoke-direct {{{r2}}}, Ljava/lang/StringBuilder;-><init>()V\n',
+                    f'    sub-int {r5}, {r5}, {r6}\n'
+                    f'    invoke-virtual {{{r2}, {r5}}}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;\n',
+                    f'    invoke-virtual {{{r2}}}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;\n',
+                    f'    move-result-object {r2}\n',
+                    f'    const-string {r1}, "sys.linevibrator_open"\n',
+                    f'    invoke-static {{{r1}, {r2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V\n'
+                ])
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
 def replace_treble_app():
     logging.info("Replacing TrebleApp...")
     treble_apk = "d/system/priv-app/TrebleApp/TrebleApp.apk"
@@ -693,9 +784,17 @@ def patch_services_jar():
     for smali_file in smali_files:
         patch_color_display_service_internal(smali_file)
 
+    smali_files = find_smali(temp_dir, ["ColorDisplayService\$.*[Nn]ight[Dd]isplay.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("ColorDisplayService.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_color_display_service_night_controller(smali_file)
+
     logging.info("Repacking services.jar...")
     try:
-        run_command(f"apktool b {temp_dir} -c -api 31 -o services.jar")
+        run_command(f"apktool b {temp_dir} -c -api 29 -o services.jar")
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to repack services.jar: {e.stderr}")
         exit_now(1)
