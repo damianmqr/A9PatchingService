@@ -684,7 +684,9 @@ def copy_a9_eink_server():
 
 def copy_a9service_apk():
     logging.info("Adding the E-Ink accessibility service...")
-    target_path = "d/system/app/a9service.apk"
+    target_path = "d/system/priv-app/a9service.apk"
+    if os.path.isfile("d/system/app/a9service.apk"):
+        os.remove("d/system/app/a9service.apk")
     shutil.copy("../a9service.apk", target_path)
     os.chmod(target_path, 0o644)
     subprocess.run(["chown", "root:root", target_path])

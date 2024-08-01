@@ -1,5 +1,6 @@
 package com.lmqr.ha9_comp_service
 
+import SystemSettingsManager
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
@@ -27,6 +28,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
+import android.widget.SeekBar
 import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.button_mapper.ButtonActionManager
 import com.lmqr.ha9_comp_service.command_runners.CommandRunner
@@ -179,6 +181,12 @@ class A9AccessibilityService : AccessibilityService(),
                     root.visibility = View.GONE
                 } else {
                     root.visibility = View.VISIBLE
+                    lightSeekbar.progress = SystemSettingsManager.getBrightnessFromSetting(this@A9AccessibilityService)
+                    buttonNight.text = when(SystemSettingsManager.getNightLightMode(this@A9AccessibilityService)){
+                        SystemSettingsManager.NightLightMode.Manual -> "Manual"
+                        SystemSettingsManager.NightLightMode.Auto -> "Auto"
+                        else -> "OFF"
+                    }
                     updateButtons(refreshModeManager.currentMode)
                 }
             } ?: run {
@@ -230,6 +238,44 @@ class A9AccessibilityService : AccessibilityService(),
                         settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         close()
                         startActivity(settingsIntent)
+                    }
+
+                    lightSeekbar.min = 0
+                    lightSeekbar.max = 255
+                    lightSeekbar.progress = SystemSettingsManager.getBrightnessFromSetting(this@A9AccessibilityService)
+                    lightSeekbar.setOnSeekBarChangeListener(
+                        object : SeekBar.OnSeekBarChangeListener {
+                            override fun onProgressChanged(
+                                seekBar: SeekBar?,
+                                progress: Int,
+                                fromUser: Boolean
+                            ) {
+                                if(fromUser)
+                                    SystemSettingsManager.setBrightnessSetting(this@A9AccessibilityService, progress)
+                            }
+
+                            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                            }
+
+                            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                            }
+
+                        }
+                    )
+
+                    buttonNight.text = when(SystemSettingsManager.getNightLightMode(this@A9AccessibilityService)){
+                        SystemSettingsManager.NightLightMode.Manual -> "Manual"
+                        SystemSettingsManager.NightLightMode.Auto -> "Auto"
+                        else -> "OFF"
+                    }
+
+                    buttonNight.setOnClickListener {
+                        val nextMode = SystemSettingsManager.setNextNightLightMode(this@A9AccessibilityService)
+                        buttonNight.text = when(nextMode){
+                            SystemSettingsManager.NightLightMode.Manual -> "Manual"
+                            SystemSettingsManager.NightLightMode.Auto -> "Auto"
+                            else -> "OFF"
+                        }
                     }
 
                     updateButtons(refreshModeManager.currentMode)

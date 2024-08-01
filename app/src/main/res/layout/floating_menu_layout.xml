@@ -72,4 +72,37 @@
             android:text="@string/speed"/>
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/light_seekbar_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_gravity="center"
+        android:padding="5dp">
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/baseline_brightness_high_24_dark" />
+
+        <SeekBar
+            android:id="@+id/light_seekbar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingVertical="10dp"
+            android:thumbTint="@color/black"/>
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/baseline_moon_24"
+            android:layout_marginHorizontal="5dp"/>
+        <Button
+            android:id="@+id/button_night"
+            style="@style/MenuButtonStyle"
+            android:layout_weight="0.3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:text="Manual"/>
+    </LinearLayout>
+
 </LinearLayout>

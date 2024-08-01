@@ -35,6 +35,7 @@
         <item>Home</item>
         <item>Recent Apps</item>
         <item>Open Menu</item>
+        <item>Toggle Night Light</item>
         <item>Nothing</item>
     </string-array>
     <string-array name="button_action_values">
@@ -45,6 +46,7 @@
         <item>home</item>
         <item>recents</item>
         <item>open_menu</item>
+        <item>toggle_night_light</item>
         <item>dummy</item>
     </string-array>
     <string-array name="button_action_entries_screen_off">
