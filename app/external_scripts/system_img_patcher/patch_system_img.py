@@ -33,6 +33,8 @@ properties = {
     "sys.disable_ext_animation": "1",
     # Recent apps
     "ro.recents.grid": "true",
+    # IMS
+    "persist.vendor.vilte_support": "0",
 }
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -692,6 +694,17 @@ def copy_a9service_apk():
     subprocess.run(["chown", "root:root", target_path])
     subprocess.run(["setfattr", "-n", "security.selinux", "-v", "u:object_r:system_file:s0", target_path])
 
+def copy_ims_apk():
+    logging.info("Adding the IMS apk...")
+    target_path = "d/system/app/ims-caf-u.apk"
+    if not os.path.isfile("../ims-caf-u.apk"):
+        logging.warning("IMS apk not found, skipping")
+        return
+    shutil.copy("../ims-caf-u.apk", target_path)
+    os.chmod(target_path, 0o644)
+    subprocess.run(["chown", "root:root", target_path])
+    subprocess.run(["setfattr", "-n", "security.selinux", "-v", "u:object_r:system_file:s0", target_path])
+
 def update_vndk_rc():
     logging.info("Updating vndk init script...")
     vndk_rc_path = "d/system/etc/init/vndk.rc"
@@ -829,6 +842,7 @@ def main():
         copy_hisense_overlay()
         copy_a9_eink_server()
         copy_a9service_apk()
+        copy_ims_apk()
         patch_services_jar()
         update_vndk_rc()
 
