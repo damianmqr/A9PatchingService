@@ -35,6 +35,7 @@ import com.lmqr.ha9_comp_service.command_runners.CommandRunner
 import com.lmqr.ha9_comp_service.command_runners.Commands
 import com.lmqr.ha9_comp_service.command_runners.UnixSocketCommandRunner
 import com.lmqr.ha9_comp_service.databinding.FloatingMenuLayoutBinding
+import kotlin.math.max
 
 
 class A9AccessibilityService : AccessibilityService(),
@@ -181,7 +182,7 @@ class A9AccessibilityService : AccessibilityService(),
                     root.visibility = View.GONE
                 } else {
                     root.visibility = View.VISIBLE
-                    lightSeekbar.progress = SystemSettingsManager.getBrightnessFromSetting(this@A9AccessibilityService)
+                    lightSeekbar.progress = max(SystemSettingsManager.getBrightnessFromSetting(this@A9AccessibilityService) - 1, 0)
                     buttonNight.text = when(SystemSettingsManager.getNightLightMode(this@A9AccessibilityService)){
                         SystemSettingsManager.NightLightMode.Manual -> "Manual"
                         SystemSettingsManager.NightLightMode.Auto -> "Auto"
@@ -241,8 +242,8 @@ class A9AccessibilityService : AccessibilityService(),
                     }
 
                     lightSeekbar.min = 0
-                    lightSeekbar.max = 255
-                    lightSeekbar.progress = SystemSettingsManager.getBrightnessFromSetting(this@A9AccessibilityService)
+                    lightSeekbar.max = 254
+                    lightSeekbar.progress = max(SystemSettingsManager.getBrightnessFromSetting(this@A9AccessibilityService) - 1, 0)
                     lightSeekbar.setOnSeekBarChangeListener(
                         object : SeekBar.OnSeekBarChangeListener {
                             override fun onProgressChanged(
@@ -251,7 +252,7 @@ class A9AccessibilityService : AccessibilityService(),
                                 fromUser: Boolean
                             ) {
                                 if(fromUser)
-                                    SystemSettingsManager.setBrightnessSetting(this@A9AccessibilityService, progress)
+                                    SystemSettingsManager.setBrightnessSetting(this@A9AccessibilityService, progress + 1)
                             }
 
                             override fun onStartTrackingTouch(seekBar: SeekBar?) {

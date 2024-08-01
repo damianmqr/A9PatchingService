@@ -15,6 +15,7 @@ class ButtonActionManager(commandRunner: CommandRunner) {
         "open_menu" to ToggleMenuButtonAction(),
         "aod_action" to PerformAODExtraButtonAction(),
         "toggle_night_light" to ToggleNightLightAction(),
+        "toggle_backlight" to ToggleBacklightAction(),
     ).withDefault { DummyButtonAction() }
 
     fun executeLongPress(context: Context){

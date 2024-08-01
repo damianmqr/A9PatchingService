@@ -4,14 +4,17 @@ import android.provider.Settings
 object SystemSettingsManager {
     private fun forceUpdate(context: Context){
         val brightness = getBrightnessFromSetting(context)
-        if (brightness == 0)
+        if (brightness <= 0)
             return
-        
-        if (brightness and 1 == 1) {
+
+        if (brightness and 1 == 0) {
             setBrightnessSetting(context, brightness - 1)
         } else {
             setBrightnessSetting(context, brightness + 1)
         }
+        val uri = Settings.System
+            .getUriFor(Settings.System.SCREEN_BRIGHTNESS)
+        context.applicationContext.contentResolver.notifyChange(uri, null)
     }
 
     fun setNightLightMode(context: Context, nightLightMode: NightLightMode) {
