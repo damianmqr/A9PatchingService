@@ -7,7 +7,7 @@ object SystemSettingsManager {
         if (brightness <= 0)
             return
 
-        if (brightness and 1 == 0) {
+        if (brightness == 255 || brightness and 1 == 0) {
             setBrightnessSetting(context, brightness - 1)
         } else {
             setBrightnessSetting(context, brightness + 1)
