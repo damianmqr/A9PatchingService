@@ -33,8 +33,6 @@ properties = {
     "sys.disable_ext_animation": "1",
     # Recent apps
     "ro.recents.grid": "true",
-    # IMS
-    "persist.vendor.vilte_support": "0",
 }
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -700,6 +698,7 @@ def copy_ims_apk():
     if not os.path.isfile("../ims-caf-u.apk"):
         logging.warning("IMS apk not found, skipping")
         return
+    properties["persist.vendor.vilte_support"] = "0"
     shutil.copy("../ims-caf-u.apk", target_path)
     os.chmod(target_path, 0o644)
     subprocess.run(["chown", "root:root", target_path])
@@ -722,7 +721,8 @@ def update_vndk_rc():
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/aw99703-bl-1/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/aw99703-bl-2/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-1/brightness\n",
-        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-2/brightness\n"
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-2/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/sh -c \"if [ ! -f /data/local/tmp/reset_carriers_done ]; then /system/bin/touch /data/local/tmp/reset_carriers_done; /system/bin/content delete --uri content://telephony/carriers/restore; fi\"\n"
     ]
 
     found_boot_completed = False
@@ -837,12 +837,12 @@ def main():
     run_command('e2fsck -E unshare_blocks -y -f s-ab-raw.img')
 
     with MountImage('s-ab-raw.img', 'd'):
-        update_build_prop()
         replace_treble_app()
         copy_hisense_overlay()
         copy_a9_eink_server()
         copy_a9service_apk()
         copy_ims_apk()
+        update_build_prop()
         patch_services_jar()
         update_vndk_rc()
 
