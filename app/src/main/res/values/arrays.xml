@@ -55,14 +55,12 @@
         <item>Clear Screen</item>
         <item>Next Track</item>
         <item>Toggle Music</item>
-        <item>AOD View Action</item>
         <item>Nothing</item>
     </string-array>
     <string-array name="button_action_values_screen_off">
         <item>clear</item>
         <item>next_track</item>
         <item>toggle_music</item>
-        <item>aod_action</item>
         <item>dummy</item>
     </string-array>
     <string-array name="mv_timeout_options">

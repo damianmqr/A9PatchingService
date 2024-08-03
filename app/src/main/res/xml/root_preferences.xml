@@ -61,6 +61,14 @@
 
     <PreferenceCategory app:title="Refresh Mode Settings">
         <SwitchPreferenceCompat
+            app:key="allow_custom_broadcast"
+            app:title="Allow Control via Broadcasts" />
+
+        <SwitchPreferenceCompat
+            app:key="refresh_on_lock"
+            app:title="Refresh Screen on Lock" />
+
+        <SwitchPreferenceCompat
             app:key="disable_perapprefresh"
             app:disableDependentsState="true"
             app:summaryOff="Disable setting refresh mode per application"
@@ -92,59 +100,6 @@
             app:updatesContinuously="false"
             app:min="0"
             android:max="100"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory app:title="Always On Display">
-
-        <SwitchPreferenceCompat
-            app:key="disable_overlay_aod"
-            app:disableDependentsState="true"
-            app:summary="Disable custom AOD on stock"
-            app:title="Disable Overlay AOD" />
-
-        <SwitchPreferenceCompat
-            app:dependency="disable_overlay_aod"
-            app:key="overlay_chess"
-            app:summary="Enable chess replays on AOD"
-            app:title="Chess AOD" />
-
-        <SwitchPreferenceCompat
-            android:dependency="disable_overlay_aod"
-            app:key="refresh_on_lock"
-            app:summary="Helps avoid ghosting on AOD"
-            app:title="Refresh AOD after screen off"
-            app:defaultValue="true"/>
-
-        <Preference
-            app:key="grant_notif_perms"
-            app:title="Grant Notification Permissions"
-            app:summary="Grant notification permissions for AOD"/>
-
-        <ListPreference
-            app:dependency="disable_overlay_aod"
-            app:key="music_view_timeout"
-            app:title="Set Timeout for MusicView Visibility"
-            app:summary="Time after which MusicView should disappear if the music is paused but the session still exists (in minutes)"
-            app:entries="@array/mv_timeout_options"
-            app:entryValues="@array/mv_timeout_values"
-            app:defaultValue="-1" />
-
-        <Preference
-            app:key="select_aod_bg"
-            android:dependency="disable_overlay_aod"
-            app:title="Select Background for AOD" />
-
-        <Preference
-            app:key="remove_aod_bg"
-            android:dependency="disable_overlay_aod"
-            app:title="Remove Background for AOD" />
-
-
-        <Preference
-            app:key="request_all_file"
-            android:dependency="disable_overlay_aod"
-            app:title="Request All File Access"
-            app:summary="The background file will be saved in folder accessible for other apps like KOReader" />
     </PreferenceCategory>
 
 </PreferenceScreen>

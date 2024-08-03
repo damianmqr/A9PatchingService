@@ -44,7 +44,6 @@ class A9AccessibilityService : AccessibilityService(),
     private lateinit var refreshModeManager: RefreshModeManager
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var buttonActionManager: ButtonActionManager
-    private lateinit var alwaysOnDisplay: AlwaysOnDisplay
     private var isScreenOn = true
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -53,17 +52,41 @@ class A9AccessibilityService : AccessibilityService(),
                 Intent.ACTION_SCREEN_OFF -> {
                     isScreenOn = false
                     menuBinding.close()
-                    if(!sharedPreferences.getBoolean("disable_overlay_aod", false))
-                        alwaysOnDisplay.openAOD()
-                    if(sharedPreferences.getBoolean("refresh_on_lock", false))
+                    if (sharedPreferences.getBoolean("refresh_on_lock", false))
                         handler.postDelayed({
                             commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))
                         }, 150)
                 }
-
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
-                    alwaysOnDisplay.closeAOD()
+                }
+            }
+        }
+    }
+    private val receiverEink: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if(!sharedPreferences.getBoolean("allow_custom_broadcast", false))
+                return
+
+            when (intent.action) {
+                "EINK_FORCE_CLEAR" -> {
+                    commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))
+                }
+
+                "EINK_REFRESH_SPEED_CLEAR" -> {
+                    refreshModeManager.changeMode(RefreshMode.CLEAR)
+                }
+
+                "EINK_REFRESH_SPEED_BALANCED" -> {
+                    refreshModeManager.changeMode(RefreshMode.BALANCED)
+                }
+
+                "EINK_REFRESH_SPEED_SMOOTH" -> {
+                    refreshModeManager.changeMode(RefreshMode.SMOOTH)
+                }
+
+                "EINK_REFRESH_SPEED_FAST" -> {
+                    refreshModeManager.changeMode(RefreshMode.SPEED)
                 }
             }
         }
@@ -77,7 +100,6 @@ class A9AccessibilityService : AccessibilityService(),
             UnixSocketCommandRunner()
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
-        alwaysOnDisplay = AlwaysOnDisplay(this)
         refreshModeManager = RefreshModeManager(
             sharedPreferences,
             commandRunner
@@ -89,6 +111,14 @@ class A9AccessibilityService : AccessibilityService(),
         filterScreen.addAction(Intent.ACTION_SCREEN_ON)
         filterScreen.addAction(Intent.ACTION_SCREEN_OFF)
         registerReceiver(receiver, filterScreen)
+
+        val filterEink = IntentFilter()
+        filterEink.addAction("EINK_FORCE_CLEAR")
+        filterEink.addAction("EINK_REFRESH_SPEED_CLEAR")
+        filterEink.addAction("EINK_REFRESH_SPEED_BALANCED")
+        filterEink.addAction("EINK_REFRESH_SPEED_SMOOTH")
+        filterEink.addAction("EINK_REFRESH_SPEED_FAST")
+        registerReceiver(receiverEink, filterEink, RECEIVER_EXPORTED)
 
         updateColorScheme(sharedPreferences)
     }
@@ -320,16 +350,12 @@ class A9AccessibilityService : AccessibilityService(),
         commandRunner.runCommands(arrayOf("theme $type $colorString"))
     }
 
-    fun performAODAction() = alwaysOnDisplay.performExtraAction()
-
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
 
             "color_scheme_type", "color_scheme_color" -> {
                 sharedPreferences?.let { updateColorScheme(it) }
             }
-
-            "overlay_chess", "aod_image_updated" -> alwaysOnDisplay.update()
 
             "close_status_bar" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)

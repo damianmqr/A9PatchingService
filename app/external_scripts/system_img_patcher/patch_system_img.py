@@ -669,6 +669,9 @@ def copy_hisense_overlay():
     if os.path.isdir(overlay_directory):
         if os.path.isfile(f"{hisense_overlay}"):
             logging.info("Adding overlay.")
+            if os.path.isfile(target_file_overlay):
+                logging.info("Removing old overlay.")
+                os.remove(target_file_overlay)
             shutil.copy(f"{hisense_overlay}", target_file_overlay)
             os.chmod(target_file_overlay, 0o644)
             subprocess.run(["chown", "root:root", target_file_overlay])
@@ -816,6 +819,310 @@ def patch_services_jar():
     shutil.move("services.jar", jar_file)
     shutil.rmtree(temp_dir)
 
+def patch_scrim_controller(smali_file_path):
+    logging.info("Patching Scrim Controller...")
+
+    with open(smali_file_path, "r") as f:
+        old_contents = f.readlines()
+
+    new_contents = []
+    inside_method = False
+    iget_pattern = re.compile(
+        r'[\s]*iget-boolean (\w+), (\w+), (L[\w/]+/[\w\$]*;->[a-zA-Z]*(S|s)upportsAmbientMode:Z[\s]*)'
+    )
+
+    for line in old_contents:
+        if ".end method" in line:
+            inside_method = False
+        if inside_method == False:
+            iget_match = iget_pattern.match(line)
+            if iget_match:
+                new_contents.append(f"    const/4 {iget_match.group(1)}, 0x1\n")
+            else:
+                new_contents.append(line)
+        if ".method" in line and "shouldFadeAwayWallpaper" in line:
+            inside_method = True
+            new_contents.append("    .locals 0\n")
+            new_contents.append("    const/4 p0, 0x0\n")
+            new_contents.append("    return p0\n")
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+
+def patch_keyguard(smali_file_path):
+    logging.info("Patching Keyguard...")
+
+    with open(smali_file_path, "r") as f:
+        old_contents = f.readlines()
+
+    new_contents = []
+    iget_pattern = re.compile(
+        r'[\s]*iget (\w+), (\w+), (L[\w/]+/[\w\$]*;->[a-zA-Z]*(D|d)arkAmount:F[\s]*)'
+    )
+
+    for line in old_contents:
+        iget_match = iget_pattern.match(line)
+        if iget_match:
+            new_contents.append(f"    const {iget_match.group(1)}, 0x0\n")
+        else:
+            new_contents.append(line)
+
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+def patch_clock(smali_file_path):
+    logging.info("Patching Clock...")
+
+    with open(smali_file_path, "r") as f:
+        old_contents = f.readlines()
+
+    new_contents = []
+    iget_pattern_1 = re.compile(
+        r'([\s]*iget \w+, \w+, L[\w\/]+\/[\w\$]*;->)(m?[Dd]oz(e|ing))([cC]olor\w*:I[\s]*)'
+    )
+    iget_pattern_2 = re.compile(
+        r'([\s]*iget \w+, \w+, L[\w\/]+\/[\w\$]*;->)(m?[Dd]oz(e|ing))([wW]eight\w*:I[\s]*)'
+    )
+
+    for line in old_contents:
+        iget_match = iget_pattern_1.match(line)
+        if iget_match:
+            new_contents.append(f"{iget_match.group(1)}lockScreen{iget_match.group(4)}")
+        else:
+            iget_match = iget_pattern_2.match(line)
+            if iget_match:
+                new_contents.append(f"{iget_match.group(1)}lockScreen{iget_match.group(4)}")
+            else:
+                new_contents.append(line)
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+def patch_notification_doze(smali_file_path):
+    logging.info("Patching Notification Doze...")
+
+    with open(smali_file_path, "r") as f:
+        old_contents = f.readlines()
+
+    new_contents = []
+    inside_method = False
+
+    for line in old_contents:
+        if ".end method" in line:
+            inside_method = False
+        if inside_method == False:
+            new_contents.append(line)
+        if ".method" in line and "updateGrayscale" in line:
+            inside_method = True
+            new_contents.append("    .locals 0\n")
+            new_contents.append("    return-void\n")
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+def patch_doze_icon_helper(smali_file_path):
+    logging.info("Patching Doze Icon...")
+
+    with open(smali_file_path, "r") as f:
+        old_contents = f.readlines()
+
+    new_contents = []
+    iget_pattern = re.compile(
+        r'[\s]*iget (\w+), (\w+), (L[\w/]+/[\w\$]*;->m?(D|d)ozeAmount:F[\s]*)'
+    )
+
+    for line in old_contents:
+        iget_match = iget_pattern.match(line)
+        if iget_match:
+            new_contents.append(f"    const {iget_match.group(1)}, 0x0\n")
+        else:
+            new_contents.append(line)
+
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+def patch_kg_indication(smali_file_path):
+    logging.info("Patching Keyguard Indication...")
+
+    with open(smali_file_path, "r") as f:
+        old_contents = f.readlines()
+
+    new_contents = []
+    iput_pattern = re.compile(
+        r'[\s]*iput-object (\w+), (\w+), (L[\w/]+/[\w\$]*;->[\w]*[Tt]ext[Cc]olor[\w]*:[\w/]+ColorStateList;[\s]*)'
+    )
+
+    for line in old_contents:
+        iput_match = iput_pattern.match(line)
+        if iput_match:
+            new_contents.append(f"    const {iput_match.group(1)}, 0xff444444\n")
+            new_contents.append(f"    invoke-static {{{iput_match.group(1)}}}, Landroid/content/res/ColorStateList;->valueOf(I)Landroid/content/res/ColorStateList;\n")
+            new_contents.append(f"    move-result-object {iput_match.group(1)}\n")
+        new_contents.append(line)
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+
+    logging.info("Patching complete.")
+
+values_per_scrim_enum = {
+    "AOD": {
+        "mFrontAlpha:F": "0x0",
+        "mAnimationDuration:J": "0x0",
+    },
+    "KEYGUARD": {
+        "mBehindAlpha:F": "0x0",
+        "mBehindTint:F": "0x0",
+        "mAnimationDuration:J": "0x0",
+        "mAnimateChange:Z": "0x0",
+        "mNotifAlpha:F": "0X0",
+    },
+    "SHADE_LOCKED": {
+        "mBehindAlpha:F": "0x0",
+        "mBehindTint:F": "0x0",
+        "mAnimateChange:Z": "0x0",
+        "mNotifAlpha:F": "0X0",
+    },
+}
+
+def patch_scrim_state(smali_file_path):
+    logging.info("Patching Scrim State...")
+
+    with open(smali_file_path, "r") as f:
+        contents = f.readlines()
+
+    in_constructor = False
+    enum_name = None
+    str_pattern = re.compile(
+        r'\s*const-string \w+, "(\w+)"\s*'
+    )
+    for line in contents:
+        if ".end method" in line:
+            in_constructor = False
+        if ".method" in line and "<init>()V" in line:
+            in_constructor = True
+        if in_constructor:
+            str_match = str_pattern.match(line)
+            if str_match:
+                enum_name = str_match.group(1)
+                break
+
+    if enum_name not in values_per_scrim_enum:
+        logging.info(f"Skipping {enum_name}.")
+        return
+
+    for k, v in values_per_scrim_enum[enum_name].items():
+        logging.info(f"Setting {k} to {v}.")
+        iput_pattern = re.compile(
+            fr'[\s]*iput([\w-]*) (\w+), (\w+), (L[\w/]+/ScrimState[\w\$]*;->{k}[\s]*)'
+        )
+        for i in range(len(contents)):
+            iput_match = iput_pattern.match(contents[i])
+            if iput_match:
+                contents[i] = f"    const{iput_match.group(1)} {iput_match.group(2)}, {v}\n{contents[i]}"
+                logging.info("Successfully set.")
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(contents)
+
+    logging.info("Patching complete.")
+
+def patch_systemui():
+    jar_file = "d/system/system_ext/priv-app/SystemUI/SystemUI.apk"
+    if not os.path.exists(jar_file):
+        logging.error("SystemUI.apk not found!")
+        exit_now(1)
+
+    logging.info("Unpacking SystemUI.apk...")
+    temp_dir = "systemui_temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    run_command(f"apktool if {jar_file}")
+    run_command(f"apktool d -r -f {jar_file} -o {temp_dir}")
+
+    smali_files = find_smali(temp_dir, ["Scrim.*\.smali", "Keyguard.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("ScrimController.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_scrim_controller(smali_file)
+
+    smali_files = find_smali(temp_dir, [".*[Kk]ey[Gg]uard.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("Keyguard.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_keyguard(smali_file)
+
+    smali_files = find_smali(temp_dir, [".*Clock.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("ClockController.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_clock(smali_file)
+
+    smali_files = find_smali(temp_dir, [".*Notification.*Doze.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("NotificationDozeHelper.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_notification_doze(smali_file)
+
+    smali_files = find_smali(temp_dir, [".*Icon.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("Icon.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_doze_icon_helper(smali_file)
+
+    smali_files = find_smali(temp_dir, [".*Key[Gg]uard.*[Ii]ndication.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("KeyguardIndicationController.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_kg_indication(smali_file)
+
+    smali_files = find_smali(temp_dir, [".*ScrimState.*\.smali"])
+    if len(smali_files) == 0:
+        logging.error("ScrimState.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_scrim_state(smali_file)
+
+    logging.info("Repacking SystemUI.apk...")
+    try:
+        run_command(f"apktool b {temp_dir} -c -api 29 -o SystemUI.apk")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to repack SystemUI.apk: {e.stderr}")
+        exit_now(1)
+    logging.info("Signing SystemUI.apk")
+    try:
+        run_command("apksigner sign --key ../platform.pk8 --cert ../platform.x509.pem SystemUI.apk")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to sign SystemUI.apk: {e.stderr}")
+        exit_now(1)
+    shutil.move("SystemUI.apk", jar_file)
+    shutil.rmtree(temp_dir)
+
 def main():
     if len(sys.argv) != 2:
         logging.error("Usage: sudo python patch_system_img.py [/path/to/system.img]")
@@ -843,6 +1150,7 @@ def main():
         copy_a9service_apk()
         copy_ims_apk()
         update_build_prop()
+        patch_systemui()
         patch_services_jar()
         update_vndk_rc()
 

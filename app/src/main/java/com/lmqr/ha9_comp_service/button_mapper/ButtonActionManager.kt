@@ -13,7 +13,6 @@ class ButtonActionManager(commandRunner: CommandRunner) {
         "home" to HomeButtonAction(),
         "recents" to RecentsButtonAction(),
         "open_menu" to ToggleMenuButtonAction(),
-        "aod_action" to PerformAODExtraButtonAction(),
         "toggle_night_light" to ToggleNightLightAction(),
         "toggle_backlight" to ToggleBacklightAction(),
     ).withDefault { DummyButtonAction() }
