@@ -327,37 +327,43 @@ def patch_vibrator_service(smali_file_path, init_file_path):
                 file.writelines(p_lines)
                 file.write('\n')
 
+override_battery_saver = {
+    "m?[Ee]nableNightMode": "0x0",
+    "m?[Dd]isable[Aa][Oo][Dd]": "0x0",
+}
+
 def patch_battery_saver(smali_file_path):
     logging.info("Patching Battery Saver...")
 
     with open(smali_file_path, 'r') as file:
         contents = file.read()
+    for k, v in override_battery_saver.items():
+        iget_pattern = re.compile(
+            rf'iget-boolean (\w+), (\w+), (L[\w/]+/[\w]*BatterySaver[\w\$]*Policy[\w\$]*;->{k}:Z)'
+        )
 
-    iget_pattern = re.compile(
-        r'iget-boolean (\w+), (\w+), (L[\w/]+/[\w]*BatterySaver[\w\$]*Policy[\w\$]*;->m?(E|e)nableNightMode:Z)'
-    )
+        def replace_iget(match):
+            first_register = match.group(1)
+            full_class_path = match.group(3)
+            return f'const/4 {first_register}, {v}\n'
 
-    def replace_iget(match):
-        first_register = match.group(1)
-        full_class_path = match.group(3)
-        return f'const/4 {first_register}, 0x0\n'
+        iput_pattern = re.compile(
+            rf'iput-boolean (\w+), (\w+), (L[\w/]+/BatterySaverPolicy\$Policy;->{k}:Z)'
+        )
 
-    iput_pattern = re.compile(
-        r'iput-boolean (\w+), (\w+), (L[\w/]+/BatterySaverPolicy\$Policy;->m?(E|e)nableNightMode:Z)'
-    )
+        def replace_iput(match):
+            first_register = match.group(1)
+            second_register = match.group(2)
+            full_class_path = match.group(3)
+            return f'const/4 {first_register}, {v}\n' \
+                   f'    iput-boolean {first_register}, {second_register}, {full_class_path}\n'
 
-    def replace_iput(match):
-        first_register = match.group(1)
-        second_register = match.group(2)
-        full_class_path = match.group(3)
-        return f'const/4 {first_register}, 0x0\n' \
-               f'    iput-boolean {first_register}, {second_register}, {full_class_path}\n'
-
-    new_contents = iget_pattern.sub(replace_iget, contents)
-    new_contents = iput_pattern.sub(replace_iput, new_contents)
+        contents = iget_pattern.sub(replace_iget, contents)
+        contents = iput_pattern.sub(replace_iput, contents)
+        logging.info(f"Set {k} to {v}.")
 
     with open(smali_file_path, 'w') as file:
-        file.write(new_contents)
+        file.write(contents)
 
     logging.info("Patching complete.")
 
@@ -652,6 +658,30 @@ def patch_color_display_service_night_controller(smali_file_path):
 
     logging.info("Patching complete.")
 
+def patch_color_fade(smali_file_path):
+    logging.info("Patching ColorFade.smali...")
+
+    with open(smali_file_path, "r") as f:
+        contents = f.readlines()
+    new_contents = []
+    inside_method = False
+
+    for line in contents:
+        new_contents.append(line)
+        if ".end method" in line:
+            inside_method = False
+        elif ".method" in line and "draw(F)" in line:
+            inside_method = True
+        elif inside_method and ".locals" in line:
+            new_contents.append("    const v0, 0x3e99999a\n")
+            new_contents.append("    mul-float p1, p1, v0\n")
+            new_contents.append("    const v0, 0x3f333333\n")
+            new_contents.append("    add-float p1, p1, v0\n")
+
+    with open(smali_file_path, "w") as f:
+        f.writelines(new_contents)
+    logging.info("Patching complete.")
+
 def replace_treble_app():
     logging.info("Replacing TrebleApp...")
     treble_apk = "d/system/priv-app/TrebleApp/TrebleApp.apk"
@@ -809,6 +839,14 @@ def patch_services_jar():
 
     for smali_file in smali_files:
         patch_color_display_service_night_controller(smali_file)
+
+    smali_files = find_smali(temp_dir, ["ColorFade\.smali"])
+    if len(smali_files) == 0:
+        logging.error("ColorFade.smali not found!")
+        exit_now(1)
+
+    for smali_file in smali_files:
+        patch_color_fade(smali_file)
 
     logging.info("Repacking services.jar...")
     try:
@@ -981,6 +1019,7 @@ def patch_kg_indication(smali_file_path):
 values_per_scrim_enum = {
     "AOD": {
         "mFrontAlpha:F": "0x0",
+        "mFrontTint:F": "0x0",
         "mAnimationDuration:J": "0x0",
     },
     "KEYGUARD": {
@@ -995,6 +1034,15 @@ values_per_scrim_enum = {
         "mBehindTint:F": "0x0",
         "mAnimateChange:Z": "0x0",
         "mNotifAlpha:F": "0X0",
+    },
+    "OFF": {
+        "mBehindAlpha:F": "0x0",
+        "mBehindTint:F": "0x0",
+        "mAnimationDuration:J": "0x0",
+        "mAnimateChange:Z": "0x0",
+        "mNotifAlpha:F": "0X0",
+        "mFrontAlpha:F": "0x0",
+        "mFrontTint:F": "0x0",
     },
 }
 
@@ -1123,6 +1171,29 @@ def patch_systemui():
     shutil.move("SystemUI.apk", jar_file)
     shutil.rmtree(temp_dir)
 
+def patch_framework_res():
+    logging.info("Patching framework-res.apk")
+    os.mkdir("framework_res_tmp")
+
+    run_command("apktool if d/system/framework/framework-res.apk")
+    run_command("apktool d -s -f d/system/framework/framework-res.apk -o framework_res_tmp")
+
+    shutil.copy('../color_fade_frag.frag', 'framework_res_tmp/res/raw/color_fade_frag.frag')
+
+    run_command("apktool b framework_res_tmp -o framework-res.apk")
+    logging.info("Patching complete.")
+
+    logging.info("Singing framework-res.apk")
+    try:
+        run_command("apksigner sign --key ../platform.pk8 --cert ../platform.x509.pem framework-res.apk")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to sign framework-res.apk: {e.stderr}")
+        exit_now(1)
+    shutil.move("framework-res.apk", "d/system/framework/framework-res.apk")
+    shutil.rmtree("framework_res_tmp")
+
+    logging.info("Patching complete.")
+
 def main():
     if len(sys.argv) != 2:
         logging.error("Usage: sudo python patch_system_img.py [/path/to/system.img]")
@@ -1150,6 +1221,7 @@ def main():
         copy_a9service_apk()
         copy_ims_apk()
         update_build_prop()
+        patch_framework_res()
         patch_systemui()
         patch_services_jar()
         update_vndk_rc()
