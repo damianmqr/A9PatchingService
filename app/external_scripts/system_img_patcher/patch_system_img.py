@@ -474,6 +474,7 @@ def patch_brightness_setting(smali_file_path):
 
                 new_contents.extend([
                     f'    iget-object {r1}, p0, {class_name}->mCdsi:Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;\n',
+                    f'    if-eqz {r1}, :cdsi_not_init\n',
                     f'    invoke-virtual {{{r1}}}, Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;->getColorTemperature()F\n',
                     f'    move-result {r2}\n',
 
@@ -504,6 +505,7 @@ def patch_brightness_setting(smali_file_path):
                     f'    move-result-object {r2}\n',
                     f'    const-string {r1}, "sys.linevibrator_open"\n',
                     f'    invoke-static {{{r1}, {r2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V\n'
+                    f'    :cdsi_not_init\n',
                 ])
         elif inside_constructor:
             iput_match = iput_pattern.match(line)
