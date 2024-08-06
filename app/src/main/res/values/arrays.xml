@@ -27,6 +27,28 @@
         <item>4</item>
         <item>5</item>
     </string-array>
+    <string-array name="static_lockscreen_options">
+        <item>Large Moon</item>
+        <item>Small Moon</item>
+        <item>Large Pause</item>
+        <item>Small Pause</item>
+    </string-array>
+    <string-array name="static_lockscreen_values">
+        <item>0</item>
+        <item>3</item>
+        <item>6</item>
+        <item>9</item>
+    </string-array>
+    <string-array name="static_lockscreen_opacity_options">
+        <item>Transparent</item>
+        <item>Semi-Transparent</item>
+        <item>Opaque</item>
+    </string-array>
+    <string-array name="static_lockscreen_opacity_values">
+        <item>2</item>
+        <item>1</item>
+        <item>0</item>
+    </string-array>
     <string-array name="button_action_entries">
         <item>Clear Screen</item>
         <item>Next Track</item>

@@ -667,9 +667,30 @@ def patch_color_fade(smali_file_path):
         contents = f.readlines()
     new_contents = []
     inside_method = False
+    last_local = 0
+
+    locals_pattern = re.compile(r'^(\s*\.locals\s+)(\d+)(\s*)$')
+    fragment_default_resource_id_re = "0x0*" + fragment_default_resource_id.split('x')[1].lstrip('0')
+    resource_match_pattern = re.compile(
+        rf'\s*const\s+([vr]\d+)\s*,\s*{fragment_default_resource_id_re}\s*'
+    )
 
     for line in contents:
+        rmp_match = resource_match_pattern.match(line)
+        locals_match = locals_pattern.match(line)
+
         new_contents.append(line)
+
+        if locals_match:
+            last_local = int(locals_match.group(2))
+            if last_local < 10:
+                new_contents[-1] = f"{locals_match.group(1)}{last_local + 1}{locals_match.group(3)}\n"
+            else:
+                last_local -= 1
+        if rmp_match:
+            formatted_replacement = fragment_resource_replacement_smali.format(reg1=f"v{last_local}", reg2=rmp_match.group(1))
+            new_contents[-1] = formatted_replacement
+
         if ".end method" in line:
             inside_method = False
         elif ".method" in line and "draw(F)" in line:
@@ -1173,14 +1194,81 @@ def patch_systemui():
     shutil.move("SystemUI.apk", jar_file)
     shutil.rmtree(temp_dir)
 
+def get_n_min_free_raw_resource(res_file, n):
+    raw_pattern = re.compile(r'<public\b[^>]*\btype="raw"[^>]*\bid="0x([0-9A-Fa-f]+)"[^>]*>')
+    with open(res_file, "r") as f:
+        matches = raw_pattern.findall(f.read())
+        min_raw_number = max(int(match, 16) for match in matches) + 1
+        return [f"0x{num:0{len(matches[0])}X}" for num in range(min_raw_number, min_raw_number+n)]
+
+def extract_resource_number(res_file, name):
+    name_pattern = re.compile(rf'<public\b[^>]*\bname="{name}"[^>]*\bid="(0x[0-9A-Fa-f]+)"[^>]*>')
+    with open(res_file, "r") as f:
+        return name_pattern.findall(f.read())[0]
+
+ev_pattern = re.compile(r"[^{]{([^}{]*)}[^}]")
+def format_eval(string, **kwargs):
+    all_matches = ev_pattern.findall(string)
+    string = string.replace("{{", "{").replace("}}", "}")
+    for match in all_matches:
+        string = string.replace(f'{{{match}}}', str(eval(match, {'abs': abs, 'round': round, 'pow': pow, 'int': int, 'float': float, 'max': max, 'min': min, 'sum': sum}, kwargs)))
+    return string
+
+def get_shader_variant(shader_name, centered=False, opacity = 0.91):
+    with open(f'../shaders/{shader_name}.frag', 'r') as f:
+        content = f.read()
+    radius = 0.25 if centered else 0.12
+    center_x = 0.5 if centered else round(radius + 0.05, 3)
+    center_y = 1.0 if centered else round(1.9 - radius, 3)
+    op_name = str(opacity).replace('.', '_')
+    return format_eval(content, center_x = center_x, center_y = center_y, opacity = opacity, radius = radius), f'{shader_name}{"_centered" if centered else ""}_{op_name}'
+
+frag_shaders = [
+    ("color_fade_frag", True, 0.91),
+    ("color_fade_frag", True, 0.67),
+    ("color_fade_frag", True, 0.4),
+    ("color_fade_frag", False, 0.91),
+    ("color_fade_frag", False, 0.67),
+    ("color_fade_frag", False, 0.4),
+    ("color_fade_frag_pause", True, 0.91),
+    ("color_fade_frag_pause", True, 0.67),
+    ("color_fade_frag_pause", True, 0.4),
+    ("color_fade_frag_pause", False, 0.91),
+    ("color_fade_frag_pause", False, 0.67),
+    ("color_fade_frag_pause", False, 0.4),
+]
+fragment_resource_replacement_smali = """
+    const-string {reg1}, "sys.linevibrator_type"
+    invoke-static {{{reg1}}}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object {reg1}
+    :try_number_type_start
+    invoke-static {{{reg1}}}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I
+    move-result {reg1}
+    :try_number_type_end
+    .catchall {{:try_number_type_start .. :try_number_type_end}} :catch_number_type
+    if-ltz {reg1}, :catch_number_type
+"""
+fragment_default_resource_id = ""
 def patch_framework_res():
+    global fragment_resource_replacement_smali
+    global fragment_default_resource_id
+
     logging.info("Patching framework-res.apk")
     os.mkdir("framework_res_tmp")
 
     run_command("apktool if d/system/framework/framework-res.apk")
     run_command("apktool d -s -f d/system/framework/framework-res.apk -o framework_res_tmp")
 
-    shutil.copy('../color_fade_frag.frag', 'framework_res_tmp/res/raw/color_fade_frag.frag')
+    resource_ids = get_n_min_free_raw_resource('framework_res_tmp/res/values/public.xml', len(frag_shaders))
+    fragment_default_resource_id = extract_resource_number('framework_res_tmp/res/values/public.xml', "color_fade_frag")
+    lines_to_add = []
+    fragment_resource_replacement_smali += f"    const {{reg2}}, {hex(len(frag_shaders))}\n    if-ge {{reg1}}, {{reg2}}, :catch_number_type\n    const {{reg2}}, {resource_ids[0]}\n    add-int {{reg2}}, {{reg2}}, {{reg1}}\n    goto :res_cond_end\n"
+    for i, rid, (shader_base_name, centered, opacity) in zip(range(1, len(frag_shaders) + 1), resource_ids, frag_shaders):
+        shader_content, shader = get_shader_variant(shader_base_name, centered, opacity)
+        with open(f'framework_res_tmp/res/raw/{shader}.frag', 'w') as f:
+            f.write(shader_content)
+        lines_to_add.append(f'    <public type="raw" name="{shader}" id="{rid}" />')
+    fragment_resource_replacement_smali += f"    :catch_number_type\n    const {{reg2}}, {resource_ids[0]}\n    :res_cond_end\n"
 
     run_command("apktool b framework_res_tmp -o framework-res.apk")
     logging.info("Patching complete.")

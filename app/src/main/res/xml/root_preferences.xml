@@ -56,6 +56,24 @@
             app:defaultValue="dummy"
             app:dialogTitle="Choose an action for long press when screen is off" />
 
+        <ListPreference
+            app:key="static_lockscreen_type"
+            app:title="Set Static Lockscreen Icon"
+            app:summary="Select which lockscreen icon should show when AoD is off"
+            app:entries="@array/static_lockscreen_options"
+            app:entryValues="@array/static_lockscreen_values"
+            app:defaultValue="0"
+            app:dialogTitle="Choose Static Lockscreen Icon Appearance" />
+
+        <ListPreference
+            app:key="static_lockscreen_opacity"
+            app:title="Set Static Lockscreen Icon Opacity"
+            app:summary="Adjust opacity of the static lockscreen icon"
+            app:entries="@array/static_lockscreen_opacity_options"
+            app:entryValues="@array/static_lockscreen_opacity_values"
+            app:defaultValue="0"
+            app:dialogTitle="Choose Static Lockscreen Icon Opacity" />
+
     </PreferenceCategory>
 
 

@@ -350,8 +350,21 @@ class A9AccessibilityService : AccessibilityService(),
         commandRunner.runCommands(arrayOf("theme $type $colorString"))
     }
 
+    private fun updateStaticLockscreen(sharedPreferences: SharedPreferences) = sharedPreferences.run {
+        try{
+            val op = Integer.parseInt(getString("static_lockscreen_opacity", "0")?:"0")
+            val tp = Integer.parseInt(getString("static_lockscreen_type", "0")?:"0")
+            commandRunner.runCommands(arrayOf("stl${op + tp}"))
+        } catch (e: NumberFormatException) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
+            "static_lockscreen_opacity", "static_lockscreen_type" -> {
+                sharedPreferences?.let { updateStaticLockscreen(it) }
+            }
 
             "color_scheme_type", "color_scheme_color" -> {
                 sharedPreferences?.let { updateColorScheme(it) }

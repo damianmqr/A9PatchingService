@@ -133,74 +133,6 @@ void writeToEpdDisplayMode(const char* value) {
     close(fd);
 }
 
-void setYellowBrightness(const char* brightness) {
-    const char* ledPath = "/sys/class/leds/aw99703-bl-1/brightness";
-    if(!valid_number(brightness)){
-        LOGE("Error writing to %s: Invalid Number\n", ledPath);
-        return;
-    }
-    int fd = open(ledPath, O_WRONLY);
-    if (fd == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-        return;
-    }
-    if (write(fd, brightness, strlen(brightness)) == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-    }
-    close(fd);
-}
-
-void setWhiteBrightness(const char* brightness) {
-    const char* ledPath = "/sys/class/leds/aw99703-bl-2/brightness";
-    if(!valid_number(brightness)){
-        LOGE("Error writing to %s: Invalid Number\n", ledPath);
-        return;
-    }
-    int fd = open(ledPath, O_WRONLY);
-    if (fd == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-        return;
-    }
-    if (write(fd, brightness, strlen(brightness)) == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-    }
-    close(fd);
-}
-
-void setYellowBrightnessAlt(const char* brightness) {
-    const char* ledPath = "/sys/class/backlight/aw99703-bl-1/brightness";
-    if(!valid_number(brightness)){
-        LOGE("Error writing to %s: Invalid Number\n", ledPath);
-        return;
-    }
-    int fd = open(ledPath, O_WRONLY);
-    if (fd == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-        return;
-    }
-    if (write(fd, brightness, strlen(brightness)) == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-    }
-    close(fd);
-}
-
-void setWhiteBrightnessAlt(const char* brightness) {
-    const char* ledPath = "/sys/class/backlight/aw99703-bl-2/brightness";
-    if(!valid_number(brightness)){
-        LOGE("Error writing to %s: Invalid Number\n", ledPath);
-        return;
-    }
-    int fd = open(ledPath, O_WRONLY);
-    if (fd == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-        return;
-    }
-    if (write(fd, brightness, strlen(brightness)) == -1) {
-        LOGE("Error writing to %s: %s\n", ledPath, strerror(errno));
-    }
-    close(fd);
-}
-
 void setWhiteThreshold(const char* brightness) {
     const char* whiteThresholdPath ="/sys/devices/platform/soc/soc:qcom,dsi-display-primary/epd_white_threshold";
     if(!valid_number(brightness)){
@@ -252,37 +184,26 @@ void setContrast(const char* brightness) {
     close(fd);
 }
 
-void blockYellowBrightness() {
-    chmod("/sys/class/leds/aw99703-bl-1/brightness", 0444);
-}
-
-void blockWhiteBrightness() {
-    chmod("/sys/class/leds/aw99703-bl-2/brightness", 0444);
-}
-
-void unblockYellowBrightness() {
-    chmod("/sys/class/leds/aw99703-bl-1/brightness", 0644);
-}
-
-void unblockWhiteBrightness() {
-    chmod("/sys/class/leds/aw99703-bl-2/brightness", 0644);
+void writeLockscreenProp(const char* value) {
+    if(!valid_number(value)){
+        LOGE("Error setting static lockscreen: Invalid Number\n");
+        return;
+    }
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/system/bin/setprop", "setprop", "sys.linevibrator_type", value, (char *)NULL);
+        LOGE("execlp failed: %s", strerror(errno));
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+        LOGE("fork failed: %s", strerror(errno));
+    } else {
+        wait(NULL);
+    }
 }
 
 void processCommand(const char* command) {
-    if (strcmp(command, "setup") == 0) {
-        ;
-    } else if (strcmp(command, "cm") == 0) {
+    if (strcmp(command, "cm") == 0) {
         epdCommitBitmap();
-    } else if (strcmp(command, "bl") == 0) {
-        setWhiteBrightness("0");
-        blockWhiteBrightness();
-    } else if (strcmp(command, "un") == 0) {
-        unblockWhiteBrightness();
-    } else if (strcmp(command, "bl1") == 0) {
-        setYellowBrightness("0");
-        blockYellowBrightness();
-    } else if (strcmp(command, "un1") == 0) {
-        unblockYellowBrightness();
     } else if (strcmp(command, "r") == 0) {
         epdForceClear();
     } else if (strcmp(command, "c") == 0) {
@@ -293,21 +214,12 @@ void processCommand(const char* command) {
         writeToEpdDisplayMode("518");
     } else if (strcmp(command, "p") == 0) {
         writeToEpdDisplayMode("521");
-    } else if (strncmp(command, "sb1", 3) == 0) {
-        if(valid_number(command+3))
-            setYellowBrightness(command+3);
-    } else if (strncmp(command, "sb2", 3) == 0) {
-        if(valid_number(command+3))
-            setWhiteBrightness(command+3);
-    }  else if (strncmp(command, "sa1", 3) == 0) {
-        if(valid_number(command+3))
-            setYellowBrightnessAlt(command+3);
-    } else if (strncmp(command, "sa2", 3) == 0) {
-        if(valid_number(command+3))
-            setWhiteBrightnessAlt(command+3);
     } else if (strncmp(command, "stw", 3) == 0) {
         if(valid_number(command+3))
             setWhiteThreshold(command+3);
+    } else if (strncmp(command, "stl", 3) == 0) {
+        if(valid_number(command+3))
+            writeLockscreenProp(command+3);
     } else if (strncmp(command, "stb", 3) == 0) {
         if(valid_number(command+3))
             setBlackThreshold(command+3);
