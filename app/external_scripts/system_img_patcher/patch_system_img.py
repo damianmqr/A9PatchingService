@@ -778,7 +778,13 @@ def update_vndk_rc():
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/aw99703-bl-2/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-1/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/aw99703-bl-2/brightness\n",
-        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/sh -c \"if [ ! -f /data/local/tmp/reset_carriers_done ]; then /system/bin/touch /data/local/tmp/reset_carriers_done; /system/bin/content delete --uri content://telephony/carriers/restore; fi\"\n"
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chmod 444 /sys/class/leds/ktd3137-bl-3/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chmod 444 /sys/class/leds/ktd3137-bl-4/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/ktd3137-bl-3/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chown root:root /sys/class/leds/ktd3137-bl-4/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/ktd3137-bl-3/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/ktd3137-bl-4/brightness\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/sh -c \"if [ ! -f /data/local/tmp/reset_carriers_done ]; then /system/bin/touch /data/local/tmp/reset_carriers_done; /system/bin/content delete --uri content://telephony/carriers/restore; fi\"\n",
     ]
 
     found_boot_completed = False
@@ -797,11 +803,12 @@ def update_vndk_rc():
 
         if not any("on property:sys.linevibrator_open=*" in line for line in lines):
             file.write("\non property:sys.linevibrator_open=*\n")
+            file.write("    write /sys/class/backlight/ktd3137-bl-3/brightness ${sys.linevibrator_open}\n")
             file.write("    write /sys/class/backlight/aw99703-bl-1/brightness ${sys.linevibrator_open}\n\n")
-
 
         if not any("on property:sys.linevibrator_short=*" in line for line in lines):
             file.write("\non property:sys.linevibrator_short=*\n")
+            file.write("    write /sys/class/backlight/ktd3137-bl-4/brightness ${sys.linevibrator_short}\n")
             file.write("    write /sys/class/backlight/aw99703-bl-2/brightness ${sys.linevibrator_short}\n\n")
 
 def patch_services_jar():
