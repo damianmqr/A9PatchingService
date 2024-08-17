@@ -1,8 +1,9 @@
 Automatically patch system.img for use with Hisense A9, adding eink features support
+For advanced users, check xda for pre-patched images.
 
 To run the script on linux and patch your own treble based system.img you simply have to:
 
-- Download the system.img you want to use (for example from Andy Yan's GSI builds https://sourceforge.net/projects/andyyan-gsi/files/)
+- Download a treble-droid based system.img you want to use
 - Download and extract a9_system_patcher.zip from https://github.com/damianmqr/a9_accessibility_service/releases/latest
 - Go in terminal to the folder containing unzipped files
 - Run `sudo bash patch_system_img.sh /path/to/system.img`
