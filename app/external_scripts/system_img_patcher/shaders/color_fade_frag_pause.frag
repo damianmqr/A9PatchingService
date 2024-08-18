@@ -15,10 +15,10 @@ void main() {{
     float yDist = abs(adjustedUV.y - {center_y});
 
     if ((dist < {radius} && dist > {round(radius * 0.85, 3)}) || (xDist > {round(radius * 0.15, 3)} && xDist < {round(radius * 0.4, 3)} && yDist < {round(radius * 0.45, 3)})) {{
-        vec3 rgb2 = pow(color.rgb * opacity * {opacity}, vec3(gamma));
+        vec3 rgb2 = mix(vec3({mix_color}, {mix_color}, {mix_color}), color.rgb, opacity * {opacity} + (1.0 - {opacity});
         gl_FragColor = vec4(rgb2, 1.0);
     }} else {{
-        vec3 rgb = pow(color.rgb * opacity, vec3(gamma));
+        vec3 rgb = mix(vec3({bg_mix_color}, {bg_mix_color}, {bg_mix_color}), color.rgb, opacity * {bg_opacity} + (1.0 - {bg_opacity});
         gl_FragColor = vec4(rgb, 1.0);
     }}
 }}

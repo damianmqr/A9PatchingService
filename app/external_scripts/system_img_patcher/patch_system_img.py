@@ -274,16 +274,16 @@ def patch_services_jar():
             string = string.replace(f'{{{match}}}', str(eval(match, {'abs': abs, 'round': round, 'pow': pow, 'int': int, 'float': float, 'max': max, 'min': min, 'sum': sum}, kwargs)))
         return string
 
-    def get_shader_variant(shader_name, centered=False, opacity = 0.91):
+    def get_shader_variant(shader_name, centered=False, opacity = 0.91, bg_opacity = 0.0, mix_color = 0.0):
         with open(f'../shaders/{shader_name}.frag', 'r') as f:
             content = f.read()
         radius = 0.25 if centered else 0.12
         center_x = 0.5 if centered else round(radius + 0.05, 3)
         center_y = 1.0 if centered else round(1.9 - radius, 3)
         op_name = str(opacity).replace('.', '_')
-        return format_eval(content, center_x = center_x, center_y = center_y, opacity = opacity, radius = radius)
+        return format_eval(content, center_x = center_x, center_y = center_y, opacity = opacity, radius = radius, bg_opacity = bg_opacity, mix_color = mix_color, bg_mix_color = 1.0 - mix_color)
 
-    shaders = [get_shader_variant(name, centered, opacity) for name in ["color_fade_frag", "color_fade_frag_pause"] for centered in [True, False] for opacity in [0.91, 0.67, 0.4]]
+    shaders = [get_shader_variant(name, centered, opacity, bg_opacity, mix_color) for name in ["color_fade_frag", "color_fade_frag_pause"] for centered in [True, False] for opacity in [0.91, 0.67, 0.4] for bg_opacity in [1.0, 0.6, 0.2, 0.0] for mix_color in [1.0, 0.0] ]
     def find_resource_id(public_xml_path, resource_name, resource_type):
         tree = ET.parse(public_xml_path)
         root = tree.getroot()
@@ -335,7 +335,7 @@ def patch_services_jar():
         registers = method.first_instruction.get_n_free_registers(2)
         method.first_instruction.expand_after([
             f"const {registers[0]}, {resource_id}",
-            f"if-ne p2, {registers[0]}, :catch_number_type",
+            f"if-ne p2, {registers[0]}, :other_resource",
             f"const-string {registers[0]}, \"sys.linevibrator_type\"",
             f"invoke-static {{{registers[0]}}}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;",
             f"move-result-object {registers[0]}",
@@ -351,6 +351,11 @@ def patch_services_jar():
             f"aget-object {registers[0]}, {registers[1]}, {registers[0]}",
             f"return-object {registers[0]}",
             ":catch_number_type",
+            f"sget-object {registers[1]}, {method.parent.class_name};->SHADER_LIST:[Ljava/lang/String;",
+            f"const {registers[0]}, 0x0",
+            f"aget-object {registers[0]}, {registers[1]}, {registers[0]}",
+            f"return-object {registers[0]}",
+            ":other_resource",
         ])
 
     def patch_ColorFade(smali_file):
