@@ -354,7 +354,9 @@ class A9AccessibilityService : AccessibilityService(),
         try{
             val op = Integer.parseInt(getString("static_lockscreen_opacity", "0")?:"0")
             val tp = Integer.parseInt(getString("static_lockscreen_type", "0")?:"0")
-            commandRunner.runCommands(arrayOf("stl${op + tp}"))
+            val bgop = Integer.parseInt(getString("static_lockscreen_bg_opacity", "0")?:"0")
+            val mix = Integer.parseInt(getString("static_lockscreen_mix_color", "0")?:"0")
+            commandRunner.runCommands(arrayOf("stl${op + tp + mix + bgop}"))
         } catch (e: NumberFormatException) {
             e.printStackTrace()
         }
@@ -362,7 +364,7 @@ class A9AccessibilityService : AccessibilityService(),
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
-            "static_lockscreen_opacity", "static_lockscreen_type" -> {
+            "static_lockscreen_opacity", "static_lockscreen_type", "static_lockscreen_bg_opacity", "static_lockscreen_mix_color" -> {
                 sharedPreferences?.let { updateStaticLockscreen(it) }
             }
 

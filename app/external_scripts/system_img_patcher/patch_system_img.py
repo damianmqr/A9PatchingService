@@ -687,6 +687,7 @@ def update_vndk_rc():
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/ktd3137-bl-3/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chcon u:object_r:sysfs_leds:s0 /sys/class/backlight/ktd3137-bl-4/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/sh -c \"if [ ! -f /data/local/tmp/reset_carriers_done ]; then /system/bin/touch /data/local/tmp/reset_carriers_done; /system/bin/content delete --uri content://telephony/carriers/restore; fi\"\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/sh -c \"if [ ! -f /data/local/tmp/disable_ambient_display ]; then /system/bin/touch /data/local/tmp/disable_ambient_display; /system/bin/settings put secure doze_enabled 0; fi\"\n",
     ]
 
     found_boot_completed = False

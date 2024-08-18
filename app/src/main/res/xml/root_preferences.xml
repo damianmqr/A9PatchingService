@@ -74,6 +74,23 @@
             app:defaultValue="0"
             app:dialogTitle="Choose Static Lockscreen Icon Opacity" />
 
+        <ListPreference
+            app:key="static_lockscreen_bg_opacity"
+            app:title="Set Static Lockscreen Background Opacity"
+            app:summary="Adjust opacity of the static lockscreen background"
+            app:entries="@array/static_lockscreen_bg_opacity_options"
+            app:entryValues="@array/static_lockscreen_bg_opacity_values"
+            app:defaultValue="0"
+            app:dialogTitle="Choose Static Lockscreen Icon Opacity" />
+
+        <ListPreference
+            app:key="static_lockscreen_mix_color"
+            app:title="Set Static Lockscreen Colors"
+            app:entries="@array/static_lockscreen_color_options"
+            app:entryValues="@array/static_lockscreen_color_values"
+            app:defaultValue="0"
+            app:dialogTitle="Choose Static Lockscreen Icon Opacity" />
+
     </PreferenceCategory>
 
 

@@ -35,9 +35,9 @@
     </string-array>
     <string-array name="static_lockscreen_values">
         <item>0</item>
-        <item>3</item>
-        <item>6</item>
-        <item>9</item>
+        <item>24</item>
+        <item>48</item>
+        <item>72</item>
     </string-array>
     <string-array name="static_lockscreen_opacity_options">
         <item>Transparent</item>
@@ -45,7 +45,27 @@
         <item>Opaque</item>
     </string-array>
     <string-array name="static_lockscreen_opacity_values">
+        <item>16</item>
+        <item>8</item>
+        <item>0</item>
+    </string-array>
+    <string-array name="static_lockscreen_bg_opacity_options">
+        <item>Transparent</item>
+        <item>Semi-Transparent</item>
+        <item>Semi-Opaque</item>
+        <item>Opaque</item>
+    </string-array>
+    <string-array name="static_lockscreen_bg_opacity_values">
+        <item>6</item>
+        <item>4</item>
         <item>2</item>
+        <item>0</item>
+    </string-array>
+    <string-array name="static_lockscreen_color_options">
+        <item>White Logo on Black Background</item>
+        <item>Black Logo on White Background</item>
+    </string-array>
+    <string-array name="static_lockscreen_color_values">
         <item>1</item>
         <item>0</item>
     </string-array>
