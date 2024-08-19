@@ -81,9 +81,6 @@ def patch_services_jar():
         method.name = "originalStartVibrationLocked"
         new_method.add_instruction('.locals 5')
         for instruction in [
-            'const-string v0, "VibratorManagerService"',
-            'const-string v1, "Custom startVibrationLocked method called"',
-            'invoke-static {v0, v1}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I',
             f'iget-object v0, p1, {method.parent.base_dir}/Vibration;->callerInfo:{method.parent.base_dir}/Vibration$CallerInfo;',
             f'iget-object v0, v0, {method.parent.base_dir}/Vibration$CallerInfo;->attrs:Landroid/os/VibrationAttributes;',
             'invoke-virtual {v0}, Landroid/os/VibrationAttributes;->getUsage()I',
@@ -492,6 +489,20 @@ def patch_services_jar():
                     ),
                 ]
             ),
+            FilePatch(
+                file_patterns = [r"BurnInProtection.*\.smali"],
+                patches = [
+                    InstructionPatch(
+                        method = MethodDetails(
+                            name = "updateBurnInProtection",
+                            return_type = "V",
+                        ),
+                        action = lambda method: method.replace_with_lines([
+                            'return-void'
+                        ])
+                    )
+                ]
+            )
         ]
     ).patch(api = 29)
 
@@ -508,6 +519,85 @@ def patch_systemui():
         },
     }
     scrim_enum_triples = list((key1, key2, value) for key1, nested_dict in values_per_scrim_enum.items() for key2, value in nested_dict.items())
+    wallpaper_flag_count = 0
+    def patch_WallpaperFlags(instruction):
+        nonlocal wallpaper_flag_count
+        next_instruction = instruction.next_known()
+        registers = next_instruction.next.get_n_free_registers(1)
+        next_instruction.expand_after([
+            f'iget-boolean {registers[0]}, {instruction.registers[0]}, {instruction.parent.parent.class_name};->mInAmbientMode:Z',
+            f'if-eqz {registers[0]}, :ambient_cond_{wallpaper_flag_count}',
+            f'const {next_instruction.registers[0]}, 0x2',
+            f':ambient_cond_{wallpaper_flag_count}',
+        ])
+        wallpaper_flag_count+=1
+
+    def patch_ImageWallpaperInit(method):
+        registers = method.first_instruction.next.get_n_free_registers(1)
+        method.first_instruction.expand_after([
+            f'const/4 {registers[0]}, 0x0',
+            f'iput-boolean {registers[0]}, p0, {method.parent.class_name};->mInAmbientMode:Z',
+        ])
+
+    def patch_ImageWallpaperEngine(smali_file):
+        smali_file.smali_class.add_field('.field private volatile mInAmbientMode:Z')
+        smali_file.smali_class.items.append((
+            'method',
+            SmaliMethod(
+                '.method public onAmbientModeChanged(ZJ)V',
+                smali_file.smali_class,
+                initial_instructions = [
+                    '.locals 7',
+                    f'iget-object v5, p0, Lcom/android/systemui/wallpapers/ImageWallpaper$CanvasEngine;->mLock:Ljava/lang/Object;',
+                    'monitor-enter v5',
+                    f'iget-boolean p2, p0, {smali_file.smali_class.class_name};->mInAmbientMode:Z',
+                    'if-eq p1, p2, :cond_no_update',
+                    f'iput-boolean p1, p0, {smali_file.smali_class.class_name};->mInAmbientMode:Z',
+                    f'iget-object v0, p0, {smali_file.smali_class.class_name};->mWallpaperManager:Landroid/app/WallpaperManager;',
+                    f'iget-object v1, p0, {smali_file.smali_class.class_name};->this$0:{smali_file.smali_class.class_name.rsplit("$", 1)[0]};',
+                    f'iget-object v1, v1, {smali_file.smali_class.class_name.rsplit("$", 1)[0]};->mUserTracker:Lcom/android/systemui/settings/UserTracker;',
+                    'check-cast v1, Lcom/android/systemui/settings/UserTrackerImpl;',
+                    'invoke-virtual {v1}, Lcom/android/systemui/settings/UserTrackerImpl;->getUserId()I',
+                    'move-result v1',
+                    'const v2, 0x0',
+                    'const v4, 0x1',
+                    'const v3, 0x1',
+                    'if-eqz p1, :is_not_ambient',
+                    'const v3, 0x2',
+                    'goto :is_ambient'
+                    ':is_not_ambient',
+                    f'invoke-virtual {{p0}}, {smali_file.smali_class.class_name};->getWallpaperFlags()I',
+                    'move-result v6',
+                    'const v3, 0x2',
+                    'if-eq v3, v6, :is_ambient',
+                    'const v3, 0x1',
+                    ':is_ambient',
+                    'invoke-virtual {v0, v1, v2, v3, v4}, Landroid/app/WallpaperManager;->getBitmapAsUser(IZIZ)Landroid/graphics/Bitmap;',
+                    'move-result-object v0',
+                    'iput-object v0, p0, Lcom/android/systemui/wallpapers/ImageWallpaper$CanvasEngine;->mBitmap:Landroid/graphics/Bitmap;',
+                    f'invoke-virtual {{p0, v0}}, {smali_file.smali_class.class_name};->drawFrameOnCanvas(Landroid/graphics/Bitmap;)V',
+                    ':cond_no_update',
+                    'monitor-exit v5',
+                    'return-void',
+                ]
+            )
+        ))
+        smali_file.smali_class.for_instruction(
+            InstructionDetails(
+                instruction_type = InstructionType.METHOD_INVOKE,
+                method = "getWallpaperFlags",
+            ),
+            action = patch_WallpaperFlags,
+        )
+        smali_file.smali_class.for_method(
+            MethodDetails(name = "<init>", return_type = "V"),
+            action = patch_ImageWallpaperInit,
+        )
+        smali_file.smali_class.for_instruction(
+            InstructionDetails(instruction_type = InstructionType.FIELD_READ, field_name = "mIsLockscreenLiveWallpaperEnabled"),
+            action = lambda inst: inst.replace(f'const/4 {inst.registers[0]}, 0x1'),
+        )
+
     JarPatcher(
         "d/system/system_ext/priv-app/SystemUI/SystemUI.apk",
         [
@@ -614,6 +704,14 @@ def patch_systemui():
                     ),
                 ]
             ),
+            FilePatch(
+                file_patterns = [r".*ImageWallpaper\$[a-zA-Z]*Engine\.smali"],
+                patches = [
+                    InstructionPatch(
+                        action = patch_ImageWallpaperEngine
+                    )
+                ]
+            )
         ]
     ).patch(install = ["d/system/system_ext/priv-app/SystemUI/SystemUI.apk"], sign = True, api = 29)
 

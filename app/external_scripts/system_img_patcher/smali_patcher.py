@@ -123,6 +123,7 @@ class InstructionType(Enum):
     LABEL = auto()
     NEW_INSTANCE = auto()
     NEW_ARRAY = auto()
+    MOVE_RESULT = auto()
     EMPTY = auto()
     UNKNOWN = auto()
 
@@ -452,7 +453,8 @@ class SmaliMethod(SmaliPiece):
 
     def replace_with_lines(self, lines, locals=0):
         self.clear()
-        map(self.add_instruction, lines)
+        for line in lines:
+            self.add_instruction(line)
         self.locals = locals
 
 
@@ -594,7 +596,22 @@ class SmaliInstruction(SmaliPiece):
             self.extract_new_instance()
         elif self.operation.startswith(('goto', 'if-')):
             self.extract_branch_or_condition()
+        elif self.operation.startswith('move-result'):
+            self.extract_move_result()
         else:
+            self.extract_unknown()
+
+    def extract_move_result(self):
+        match = re.match(r'^(?P<op>\S+)\s+(?P<reg>[pv]\d+)', self.original_line)
+        if match:
+            op = match.group('op')
+            self.details = InstructionDetails(
+                instruction_type=InstructionType.MOVE_RESULT,
+                modifier=op[11:],
+                registers=[match.group('reg')],
+            )
+        else:
+            logging.warning(f'Unrecognised move-result pattern: {self.original_line}')
             self.extract_unknown()
 
     def extract_field_access(self):
@@ -780,6 +797,8 @@ class SmaliInstruction(SmaliPiece):
             return f"{self.operation} {registers}{self.details.label}"
         elif self.details.instruction_type.matches(InstructionType.LABEL):
             return self.details.label
+        elif self.details.instruction_type.matches(InstructionType.MOVE_RESULT):
+            return f"move-result{self.details.modifier} {self.details.registers[0]}"
         return self.original_line
 
     def matches(self, search_details: InstructionDetails) -> bool:
