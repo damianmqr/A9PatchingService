@@ -124,6 +124,7 @@ class InstructionType(Enum):
     NEW_INSTANCE = auto()
     NEW_ARRAY = auto()
     MOVE_RESULT = auto()
+    MOVE = auto()
     EMPTY = auto()
     UNKNOWN = auto()
 
@@ -598,6 +599,8 @@ class SmaliInstruction(SmaliPiece):
             self.extract_branch_or_condition()
         elif self.operation.startswith('move-result'):
             self.extract_move_result()
+        elif self.operation.startswith('move'):
+            self.extract_move()
         else:
             self.extract_unknown()
 
@@ -612,6 +615,20 @@ class SmaliInstruction(SmaliPiece):
             )
         else:
             logging.warning(f'Unrecognised move-result pattern: {self.original_line}')
+            self.extract_unknown()
+
+    def extract_move(self):
+        match = re.match(r'^(?P<op>\S+)\s+(?P<regs>([pv]\d+,?\s*)+)', self.original_line)
+        if match:
+            op = match.group('op')
+            registers = [r.strip() for r in match.group('regs').strip(' \t\f,').split(',')]
+            self.details = InstructionDetails(
+                instruction_type=InstructionType.MOVE,
+                modifier=op[4:],
+                registers=registers,
+            )
+        else:
+            logging.warning(f'Unrecognised move pattern: {self.original_line}')
             self.extract_unknown()
 
     def extract_field_access(self):
@@ -738,6 +755,7 @@ class SmaliInstruction(SmaliPiece):
                 InstructionType.CONSTANT,
                 InstructionType.NEW_INSTANCE,
                 InstructionType.NEW_ARRAY,
+                InstructionType.MOVE,
                }:
                 reg = current_instruction.details.registers[0]
                 if reg not in potential_registers:
@@ -799,6 +817,9 @@ class SmaliInstruction(SmaliPiece):
             return self.details.label
         elif self.details.instruction_type.matches(InstructionType.MOVE_RESULT):
             return f"move-result{self.details.modifier} {self.details.registers[0]}"
+        elif self.details.instruction_type.matches(InstructionType.MOVE):
+            registers = ', '.join(self.details.registers)
+            return f"move{self.details.modifier} {registers}"
         return self.original_line
 
     def matches(self, search_details: InstructionDetails) -> bool:

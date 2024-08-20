@@ -381,6 +381,23 @@ def patch_services_jar():
             action = patch_readFile,
         )
 
+    def patch_GetBrightness(instruction):
+        instruction = instruction.next_known()
+        if instruction.instruction_type != InstructionType.MOVE_RESULT:
+            return
+        register = instruction.next.get_n_free_registers(1)[0]
+        instruction.expand_after([
+            f"const {register}, 0x3f800000",
+            f"sub-float {instruction.registers[0]}, {register}, {instruction.registers[0]}",
+        ])
+
+    def patch_SetBrightness(instruction):
+        register = instruction.get_n_free_registers(1)[0]
+        instruction.expand_before([
+            f"const {register}, 0x3f800000",
+            f"sub-float {instruction.registers[-1]}, {register}, {instruction.registers[-1]}",
+        ])
+
     JarPatcher(
         "d/system/framework/services.jar",
         [
@@ -514,6 +531,28 @@ def patch_services_jar():
                         ])
                     )
                 ]
+            ),
+            FilePatch(
+                file_patterns = [r"AutomaticBrightnessController\.smali"],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"get.*Brightness.*"),
+                            return_type = "F",
+                            class_name = Matcher.regex(r".*BrightnessMappingStrategy.*"),
+                        ),
+                        action = patch_GetBrightness
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"(convertTo|addUserDataPoint).*"),
+                            class_name = Matcher.regex(r".*BrightnessMappingStrategy.*"),
+                        ),
+                        action = patch_SetBrightness
+                    ),
+                ],
             )
         ]
     ).patch(api = 29)
