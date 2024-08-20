@@ -56,6 +56,11 @@ def patch_services_jar():
                 f'invoke-static {{{register1}, {register2}}}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
             ]
 
+    invokeVibrationLocked = None
+    def extract_invokeVibrationLocked(instruction):
+        nonlocal invokeVibrationLocked
+        invokeVibrationLocked = instruction
+
     def patch_startVibrationLocked(method):
         add_pattern_to_initrc(
             "sys.linevibrator_on", "1",
@@ -132,7 +137,7 @@ def patch_services_jar():
             'const-string v2, "Exception while writing to file"',
             'invoke-static {v1, v2, v0}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I',
             ':usage_end',
-            f'invoke-direct {{p0, p1}}, {method.parent.class_name};->{method.name}({method.parameters}){method.return_type}',
+            f'invoke{invokeVibrationLocked.modifier} {{p0, p1}}, {method.parent.class_name};->{method.name}({method.parameters}){method.return_type}',
             'move-result-object v0',
             'return-object v0',
         ]:
@@ -458,6 +463,13 @@ def patch_services_jar():
             FilePatch(
                 file_patterns = [r"Vibrator(Manager)?Service\.smali"],
                 patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            method = "startVibrationLocked",
+                        ),
+                        action = extract_invokeVibrationLocked,
+                    ),
                     InstructionPatch(
                         method = "startVibrationLocked",
                         action = patch_startVibrationLocked,
