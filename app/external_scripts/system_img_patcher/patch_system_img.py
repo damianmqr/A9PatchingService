@@ -384,11 +384,11 @@ def patch_services_jar():
         )
 
     def patch_GetBrightness(instruction):
+        value = "0x0" if "Adjustment" in instruction.method else "0x3f800000"
         instruction = instruction.next_known()
         if instruction.instruction_type != InstructionType.MOVE_RESULT:
             return
         register = instruction.next.get_n_free_registers(1)[0]
-        value = "0x0" if "Adjustment" in instruction.method else "0x3f800000"
         instruction.expand_after([
             f"const {register}, {value}",
             f"sub-float {instruction.registers[0]}, {register}, {instruction.registers[0]}",
