@@ -858,7 +858,7 @@ def replace_file(dst, perms = 0o644, owner = "root:root", secontext = "u:object_
         src = f"../{file_name}"
 
     if not os.path.isfile(src):
-        logging.warning(f"Replacement file {src} doesn't exist.")
+        logging.warning(f"Replacement file {src} doesn't exist. Skipping.")
         return False
 
     if os.path.isfile(dst):

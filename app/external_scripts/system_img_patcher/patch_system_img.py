@@ -322,18 +322,20 @@ def patch_services_jar():
         if framework_res_apk_path is None:
             logging.error("framework-res.apk not found.")
             exit_now(1)
+        try:
+            output_folder = 'decompiled_framework_res'
+            os.makedirs(output_folder, exist_ok=True)
+            subprocess.run(['apktool', 'd', "--no-src", framework_res_apk_path, '-o', output_folder, '-f'], check=True)
 
-        output_folder = 'decompiled_framework_res'
-        os.makedirs(output_folder, exist_ok=True)
-        subprocess.run(['apktool', 'd', "--no-src", framework_res_apk_path, '-o', output_folder, '-f'], check=True)
+            public_xml_path = os.path.join(output_folder, 'res', 'values', 'public.xml')
 
-        public_xml_path = os.path.join(output_folder, 'res', 'values', 'public.xml')
-
-        resource_id = find_resource_id(public_xml_path, 'color_fade_frag', 'raw')
-        if not resource_id:
-            logging.error("Shader resource not found.")
-            exit_now(1)
-
+            resource_id = find_resource_id(public_xml_path, 'color_fade_frag', 'raw')
+            if not resource_id:
+                logging.error("Shader resource not found.")
+                exit_now(1)
+        except subprocess.CalledProcessError:
+            resource_id = "0x01100002"
+            logging.warning("Couldn't extract framework-res! Hardcoding resource id for shader to 0x01100002, this may break static AoD!")
         registers = method.first_instruction.get_n_free_registers(2)
         method.first_instruction.expand_after([
             f"const {registers[0]}, {resource_id}",
@@ -386,16 +388,36 @@ def patch_services_jar():
         if instruction.instruction_type != InstructionType.MOVE_RESULT:
             return
         register = instruction.next.get_n_free_registers(1)[0]
+        value = "0x0" if "Adjustment" in instruction.method else "0x3f800000"
         instruction.expand_after([
-            f"const {register}, 0x3f800000",
+            f"const {register}, {value}",
             f"sub-float {instruction.registers[0]}, {register}, {instruction.registers[0]}",
         ])
 
     def patch_SetBrightness(instruction):
-        register = instruction.get_n_free_registers(1)[0]
+        registers = instruction.get_n_free_registers(2)
+        value = "0x0" if "Adjustment" in instruction.method else "0x3f800000"
         instruction.expand_before([
+            f"const {registers[0]}, {value}",
+            f"sub-float {registers[1]}, {registers[0]}, {instruction.registers[-1]}",
+        ])
+        instruction.registers[-1] = registers[1]
+
+    def patch_GetSetBrightness(instruction):
+        registers = instruction.get_n_free_registers(2)
+        value = "0x0" if "Adjustment" in instruction.method else "0x3f800000"
+        instruction.expand_before([
+            f"const {registers[0]}, {value}",
+            f"sub-float {registers[1]}, {registers[0]}, {instruction.registers[-1]}",
+        ])
+        instruction.registers[-1] = registers[1]
+        instruction = instruction.next_known()
+        if instruction.instruction_type != InstructionType.MOVE_RESULT or 'djustment' in instruction.parent.name:
+            return
+        register = instruction.next.get_n_free_registers(1)[0]
+        instruction.expand_after([
             f"const {register}, 0x3f800000",
-            f"sub-float {instruction.registers[-1]}, {register}, {instruction.registers[-1]}",
+            f"sub-float {instruction.registers[0]}, {register}, {instruction.registers[0]}",
         ])
 
     JarPatcher(
@@ -533,12 +555,12 @@ def patch_services_jar():
                 ]
             ),
             FilePatch(
-                file_patterns = [r"AutomaticBrightnessController\.smali"],
+                file_patterns = [r"AutomaticBrightnessController\S*\.smali"],
                 patches = [
                     InstructionPatch(
                         instruction = InstructionDetails(
                             InstructionType.METHOD_INVOKE,
-                            method = Matcher.regex(r"get.*Brightness.*"),
+                            method = Matcher.regex(r"(getBrightness|convertToFloatScale)"),
                             return_type = "F",
                             class_name = Matcher.regex(r".*BrightnessMappingStrategy.*"),
                         ),
@@ -547,10 +569,20 @@ def patch_services_jar():
                     InstructionPatch(
                         instruction = InstructionDetails(
                             InstructionType.METHOD_INVOKE,
-                            method = Matcher.regex(r"(convertTo|addUserDataPoint).*"),
+                            method = Matcher.regex(r"(convertTo.*Nits|addUserDataPoint)"),
                             class_name = Matcher.regex(r".*BrightnessMappingStrategy.*"),
+                            param_types = Matcher.regex(r".*F"),
                         ),
                         action = patch_SetBrightness
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"get.*Threshold.*"),
+                            class_name = Matcher.regex(r".*HysteresisLevels.*"),
+                            param_types = Matcher.regex(r".*F"),
+                        ),
+                        action = patch_GetSetBrightness
                     ),
                 ],
             )
@@ -766,6 +798,44 @@ def patch_systemui():
         ]
     ).patch(install = ["d/system/system_ext/priv-app/SystemUI/SystemUI.apk"], sign = True, api = 29)
 
+def patch_AddTintToCall():
+    namespaces = {
+        'android': 'http://schemas.android.com/apk/res/android',
+        'app': 'http://schemas.android.com/apk/res-auto'
+    }
+    
+    for prefix, uri in namespaces.items():
+        ET.register_namespace(prefix, uri)
+
+    with open('res/layout/swipe_up_down_method.xml', 'r') as f:
+        content_xml = ET.fromstring(f.read())
+
+    content_xml.set('{http://schemas.android.com/apk/res/android}background', '#66000000')
+
+    for elem in content_xml.iter():
+        margin_start = elem.get('{http://schemas.android.com/apk/res/android}layout_marginStart')
+        margin_end = elem.get('{http://schemas.android.com/apk/res/android}layout_marginEnd')
+
+        if margin_start:
+            elem.set('{http://schemas.android.com/apk/res/android}paddingStart', margin_start)
+            elem.attrib.pop('{http://schemas.android.com/apk/res/android}layout_marginStart', None)
+
+        if margin_end:
+            elem.set('{http://schemas.android.com/apk/res/android}paddingEnd', margin_end)
+            elem.attrib.pop('{http://schemas.android.com/apk/res/android}layout_marginEnd', None)
+
+    with open('res/layout/swipe_up_down_method.xml', 'w') as file:
+        ET.ElementTree(content_xml).write(file, encoding="unicode", xml_declaration=True)
+
+
+def patch_CallUI():
+    JarPatcher(
+        "d/system/product/priv-app/Dialer/Dialer.apk",
+        [
+            FunctionPatch(action=patch_AddTintToCall)
+        ]
+    ).patch(sign = True, use_res = True, use_src = False, api = 29)
+
 def update_build_prop():
     properties = {
         # Phone information
@@ -889,7 +959,12 @@ def main():
         replace_file("d/system/bin/a9_eink_server", perms = 0o755, owner = "root:2000", secontext = "u:object_r:phhsu_exec:s0")
         replace_file("d/system/priv-app/a9service.apk")
         replace_file("d/system/app/ims-caf-u.apk")
+        replace_file("d/system/etc/hosts")
         update_build_prop()
+        try:
+            patch_CallUI()
+        except subprocess.CalledProcessError:
+            logging.warning('Dialer app patching error, skipping.')
         patch_systemui()
         patch_services_jar()
         update_vndk_rc()
