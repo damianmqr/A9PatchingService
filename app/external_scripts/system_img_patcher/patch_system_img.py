@@ -794,7 +794,41 @@ def patch_systemui():
                         action = patch_ImageWallpaperEngine
                     )
                 ]
-            )
+            ),
+            FilePatch(
+                file_patterns = [r"Doze(Sensors|Triggers)\S*\.smali"],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_WRITE,
+                            field_name = Matcher.regex(r"mListening(TouchScreen|Prox)\S*Sensors?"),
+                            data_type = "Z",
+                        ),
+                        action = lambda instruction: instruction.insert_before(f'const {instruction.registers[0]}, 0x0'),
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_READ,
+                            field_name = Matcher.regex(r"mListening(TouchScreen|Prox)\S*Sensors?"),
+                            data_type = "Z",
+                        ),
+                        action = lambda instruction: instruction.replace(f'const {instruction.registers[0]}, 0x0'),
+                    ),
+                ],
+            ),
+            FilePatch(
+                file_patterns = [r"DozeSensors\.smali"],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"(register|resume)"),
+                            class_name = Matcher.regex(r'.*(Proximity|Threshold)Sensor;?'),
+                        ),
+                        action = lambda instruction: instruction.remove()
+                    ),
+                ],
+            ),
         ]
     ).patch(install = ["d/system/system_ext/priv-app/SystemUI/SystemUI.apk"], sign = True, api = 29)
 
