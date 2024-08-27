@@ -125,6 +125,7 @@ class InstructionType(Enum):
     NEW_ARRAY = auto()
     MOVE_RESULT = auto()
     MOVE = auto()
+    RETURN = auto()
     EMPTY = auto()
     UNKNOWN = auto()
 
@@ -368,7 +369,7 @@ class SmaliClass(SmaliPiece):
         class_regex = r'\.class\s+([\w\s]+\s+)?([^;\s]+);'
         class_match = re.search(class_regex, content)
         if class_match:
-            self.class_name = class_match.group(2)
+            self.class_name = class_match.group(2)+";"
             class_split = self.class_name.split('/')
             if len(class_split) > 1:
                 self.base_dir = '/'.join(class_split[:-1])
@@ -396,7 +397,7 @@ class SmaliClass(SmaliPiece):
 
     def __str__(self):
         modifiers = ' '.join(self.class_modifiers) + (' ' if len(self.class_modifiers) > 0 else '')
-        class_header = f".class {modifiers}{self.class_name};"
+        class_header = f".class {modifiers}{self.class_name}"
         return f"{class_header}\n" + "\n".join(str(item[1]) for item in self.items) + ("\n" if len(self.items) > 0 else "")
 
 
@@ -487,6 +488,7 @@ class SmaliInstruction(SmaliPiece):
         self.prev: Optional['SmaliInstruction'] = None
         self.next: Optional['SmaliInstruction'] = None
         self.indent = len(line) - len(line.lstrip())
+        self.visited = False
         if self.indent < 4:
             self.indent = 4
         self.original_line: str = line.strip()
@@ -601,7 +603,22 @@ class SmaliInstruction(SmaliPiece):
             self.extract_move_result()
         elif self.operation.startswith('move'):
             self.extract_move()
+        elif self.operation.startswith('return'):
+            self.extract_return()
         else:
+            self.extract_unknown()
+
+    def extract_return(self):
+        match = re.match(r'^(?P<op>\S+)\s*(?P<reg>[pv]\d+)?', self.original_line)
+        if match:
+            op = match.group('op')
+            self.details = InstructionDetails(
+                instruction_type=InstructionType.RETURN,
+                modifier=op[6:],
+                registers=[match.group('reg')] if match.group('reg') else [],
+            )
+        else:
+            logging.warning(f'Unrecognised return pattern: {self.original_line}')
             self.extract_unknown()
 
     def extract_move_result(self):
@@ -632,7 +649,7 @@ class SmaliInstruction(SmaliPiece):
             self.extract_unknown()
 
     def extract_field_access(self):
-        match = re.match(r'^(?P<op>\S+)\s+(?P<regs>([pv]\d+,\s*)+)\s+(?P<class>\S+);->(?P<field>[^\s\:]+):(?P<type>\S+)', self.original_line)
+        match = re.match(r'^(?P<op>\S+)\s+(?P<regs>([pv]\d+,\s*)+)\s+(?P<class>\S+)->(?P<field>[^\s\:]+):(?P<type>\S+)', self.original_line)
         if match:
             op = match.group('op')
             instruction_type = InstructionType.FIELD_WRITE if 'put' in op else InstructionType.FIELD_READ
@@ -650,7 +667,7 @@ class SmaliInstruction(SmaliPiece):
             self.extract_unknown()
 
     def extract_method_invoke(self):
-        match = re.match(r'^(?P<op>\S+)\s+\{(?P<regs>[^}]*)\},\s+(?P<class>\S+);->(?P<method>\S+)\((?P<params>[^)]*)\)(?P<ret>\S+)', self.original_line)
+        match = re.match(r'^(?P<op>\S+)\s+\{(?P<regs>[^}]*)\},\s+(?P<class>\S+)->(?P<method>\S+)\((?P<params>[^)]*)\)(?P<ret>\S+)\s*$', self.original_line)
         if match:
             registers = [r.strip() for r in match.group('regs').strip(' \t\f,').split(',')]
             op = match.group('op')
@@ -729,26 +746,35 @@ class SmaliInstruction(SmaliPiece):
             registers=re.findall(r'[{\s,]([pv]\d+)[,}\s]', f" {self.original_line} "),
         )
 
-    def find_unsafe_registers(self):
-        current_instruction = self.prev
-        used_labels = set()
-        used_registers = set()
+    def _find_target(self):
+        if self.details.instruction_type != InstructionType.BRANCH:
+            return None
 
+        current_instruction = self
         while current_instruction is not None:
-            if current_instruction.details.instruction_type == InstructionType.LABEL:
-                used_labels.add(current_instruction.details.label)
-            if current_instruction.details.registers is not None:
-                used_registers.update(current_instruction.details.registers)
+            if current_instruction.details.instruction_type == InstructionType.LABEL and current_instruction.details.label == self.details.label:
+                return current_instruction
+            current_instruction = current_instruction.next
+
+        current_instruction = self.prev
+        while current_instruction is not None:
+            if current_instruction.details.instruction_type == InstructionType.LABEL and current_instruction.details.label == self.details.label:
+                return current_instruction
             current_instruction = current_instruction.prev
 
-        potential_labels = set()
-        potential_registers = set()
-        safe_registers = set()
-        current_instruction = self
-        before_jump = True
+        return None
 
-        while current_instruction is not None:
-            if before_jump \
+    def _find_unsafe_registers(self, is_conditional = False):
+        if self.visited:
+            return set(), set()
+
+        safe_registers = set()
+        unsafe_registers = set()
+        current_instruction = self
+
+        while current_instruction is not None and not current_instruction.visited:
+            current_instruction.visited = True
+            if not is_conditional \
                and current_instruction.details.registers is not None \
                and current_instruction.details.instruction_type in {
                 InstructionType.FIELD_READ,
@@ -758,30 +784,40 @@ class SmaliInstruction(SmaliPiece):
                 InstructionType.MOVE,
                }:
                 reg = current_instruction.details.registers[0]
-                if reg not in potential_registers:
+                if reg not in unsafe_registers:
                     safe_registers.add(reg)
 
-            if current_instruction.details.instruction_type == InstructionType.LABEL:
-                potential_labels.add(current_instruction.details.label)
-
-            elif current_instruction.details.label and current_instruction.details.label in used_labels:
-                before_jump = False
-                used_labels |= potential_labels
-                used_registers |= potential_registers
-
             if current_instruction.details.registers is not None:
-                potential_registers.update(current_instruction.details.registers)
+                unsafe_registers.update(current_instruction.details.registers)
+
+            if current_instruction.details.instruction_type == InstructionType.BRANCH:
+                if current_instruction.registers and len(current_instruction.registers) > 0:
+                    is_conditional = True
+                    unsafe_registers.update(current_instruction._find_target()._find_unsafe_registers(is_conditional = True)[1])
+                else:
+                    current_instruction = current_instruction._find_target()
+                    continue
+
+            if current_instruction.instruction_type == InstructionType.RETURN:
+                break
 
             current_instruction = current_instruction.next
 
-        if before_jump:
-            return potential_registers.difference(safe_registers)
-        else:
-            return used_registers.difference(safe_registers)
+        return safe_registers, unsafe_registers.difference(safe_registers)
 
     def get_n_free_registers(self, n):
+        current_instruction = self
+        while current_instruction is not None:
+            current_instruction.visited = False
+            current_instruction = current_instruction.next
+
+        current_instruction = self.prev
+        while current_instruction is not None:
+            current_instruction.visited = False
+            current_instruction = current_instruction.prev
+
         free_registers = []
-        unsafe_registers = self.find_unsafe_registers()
+        unsafe_registers = self._find_unsafe_registers()[1]
         for i in range(self.parent.locals + n + 2):
             if len(free_registers) >= n:
                 return free_registers
@@ -800,10 +836,10 @@ class SmaliInstruction(SmaliPiece):
     def str_from_type(self):
         if self.details.instruction_type.matches([InstructionType.FIELD_WRITE, InstructionType.FIELD_READ]):
             op = self.operation[0] + ("put" if self.details.instruction_type == InstructionType.FIELD_WRITE else "get")
-            return f"{op}{self.details.modifier} {', '.join(self.details.registers)}, {self.details.class_name};->{self.details.field_name}:{self.details.data_type}"
+            return f"{op}{self.details.modifier} {', '.join(self.details.registers)}, {self.details.class_name}->{self.details.field_name}:{self.details.data_type}"
         elif self.details.instruction_type.matches(InstructionType.METHOD_INVOKE):
             registers = ', '.join(self.details.registers)
-            return f"invoke{self.details.modifier} {{{registers}}}, {self.details.class_name};->{self.details.method}({self.details.param_types}){self.details.return_type}"
+            return f"invoke{self.details.modifier} {{{registers}}}, {self.details.class_name}->{self.details.method}({self.details.param_types}){self.details.return_type}"
         elif self.details.instruction_type.matches(InstructionType.CONSTANT):
             return f"const{self.details.modifier} {self.details.registers[0]}, {self.details.constant_value}"
         elif self.details.instruction_type.matches(InstructionType.NEW_ARRAY):
@@ -820,6 +856,9 @@ class SmaliInstruction(SmaliPiece):
         elif self.details.instruction_type.matches(InstructionType.MOVE):
             registers = ', '.join(self.details.registers)
             return f"move{self.details.modifier} {registers}"
+        elif self.details.instruction_type.matches(InstructionType.RETURN):
+            registers = '' if len(self.details.registers) == 0 else f' {self.details.registers[0]}'
+            return f"return{self.details.modifier}{registers}"
         return self.original_line
 
     def matches(self, search_details: InstructionDetails) -> bool:
@@ -827,7 +866,7 @@ class SmaliInstruction(SmaliPiece):
 
 class SmaliField(SmaliPiece):
     def __init__(self, line: str, parent: Any):
-        match = re.match(r'\.field\s+(?P<modifiers>(\S+[\t \f]+)*)(?P<name>[^\s:]+):(?P<type>[^\s=]+)(\s*=\s*(?P<value>[^\n]+))?', line)
+        match = re.match(r'\.field\s+(?P<modifiers>([^\s:="]+[\t \f]+)*)(?P<name>[^\s:="]+):(?P<type>[^\s=]+)(\s*=\s*(?P<value>[^\n]+))?[ \t\f]*$', line)
         if match:
             self.line = None
             self.details = FieldDetails(

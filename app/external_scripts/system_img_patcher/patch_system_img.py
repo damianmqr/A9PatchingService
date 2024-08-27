@@ -30,6 +30,16 @@ class MountImage:
         run_command(f'umount {self.mount_point}')
         logging.info(f"Unmounted {self.image_path} from {self.mount_point}")
 
+keep_scale_count = 0
+def patch_OverrideAnimatorScale(instruction):
+    global keep_scale_count
+    registers = instruction.get_n_free_registers(1)
+    instruction.expand_before([
+        f'const {registers[0]}, 0x3f800000',
+        f'invoke-virtual {{{instruction.registers[0]}, {registers[0]}}}, {instruction.class_name}->overrideDurationScale(F)V',
+    ])
+    keep_scale_count += 1
+
 def patch_services_jar():
     def add_pattern_to_initrc(property_name, property_value, pattern_seq, pattern_loop, do_open=False):
         with open("../d/system/etc/init/vndk.rc", "a") as init_file:
@@ -137,7 +147,7 @@ def patch_services_jar():
             'const-string v2, "Exception while writing to file"',
             'invoke-static {v1, v2, v0}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I',
             ':usage_end',
-            f'invoke{invokeVibrationLocked.modifier} {{p0, p1}}, {method.parent.class_name};->{method.name}({method.parameters}){method.return_type}',
+            f'invoke{invokeVibrationLocked.modifier} {{p0, p1}}, {method.parent.class_name}->{method.name}({method.parameters}){method.return_type}',
             'move-result-object v0',
             'return-object v0',
         ]:
@@ -148,12 +158,12 @@ def patch_services_jar():
         max_brightness_value = "0x44fa0000"
         registers = instruction.next.get_n_free_registers(6)
         instruction.expand_after([
-            f'iget-object {registers[0]}, p0, {instruction.class_name};->mCdsi:Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;',
+            f'iget-object {registers[0]}, p0, {instruction.class_name}->mCdsi:Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;',
             f'if-eqz {registers[0]}, :cdsi_not_init',
             f'invoke-virtual {{{registers[0]}}}, Lcom/android/server/display/color/ColorDisplayService$ColorDisplayServiceInternal;->getColorTemperature()F',
             f'move-result {registers[1]}',
 
-            f'iget {registers[2]}, p0, {instruction.class_name};->mChangedBrightnessValue:F',
+            f'iget {registers[2]}, p0, {instruction.class_name}->mChangedBrightnessValue:F',
             f'const {registers[3]}, {max_brightness_value}',
             f'mul-float {registers[2]}, {registers[2]}, {registers[3]}', # registers[2] = mChangedBrightnessValue * MAX
 
@@ -186,7 +196,7 @@ def patch_services_jar():
     def patch_onColorTemperatureChanged(method):
         registers = method.first_instruction.next.get_n_free_registers(7)
         method.first_instruction.expand_after([
-             f'invoke-virtual {{p0}}, {method.parent.class_name};->isActivated()Z',
+             f'invoke-virtual {{p0}}, {method.parent.class_name}->isActivated()Z',
              f'move-result {registers[0]}',
              f'if-nez {registers[0]}, :cond_activated_int',
              f'const {registers[1]}, 0x3f800000',
@@ -246,7 +256,7 @@ def patch_services_jar():
                 smali_file.smali_class,
                 initial_instructions = [
                     '.locals 4',
-                    f'iget-object v0, p0, {smali_file.smali_class.class_name};->this$0:{base_class};',
+                    f'iget-object v0, p0, {smali_file.smali_class.class_name}->this$0:{base_class};',
                     f'invoke-static {{v0}}, {base_class};->-$$Nest$fgetmNightDisplayTintController({base_class};){base_class}$NightDisplayTintController;',
                     'move-result-object v0',
                     f'invoke-virtual {{v0}}, {base_class}$NightDisplayTintController;->isActivated()Z',
@@ -309,7 +319,7 @@ def patch_services_jar():
                 f"const {registers[2]}, {hex(i)}",
                 f"aput-object {registers[0]}, {registers[1]}, {registers[2]}",
             ])
-        static_shader_list_smali.append(f"sput-object {registers[1]}, {method.parent.class_name};->SHADER_LIST:[Ljava/lang/String;")
+        static_shader_list_smali.append(f"sput-object {registers[1]}, {method.parent.class_name}->SHADER_LIST:[Ljava/lang/String;")
         method.first_instruction.expand_after(static_shader_list_smali)
 
     def patch_readFile(method):
@@ -351,11 +361,11 @@ def patch_services_jar():
             f"if-ltz {registers[0]}, :catch_number_type",
             f"const {registers[1]}, {hex(len(shaders))}",
             f"if-ge {registers[0]}, {registers[1]}, :catch_number_type",
-            f"sget-object {registers[1]}, {method.parent.class_name};->SHADER_LIST:[Ljava/lang/String;",
+            f"sget-object {registers[1]}, {method.parent.class_name}->SHADER_LIST:[Ljava/lang/String;",
             f"aget-object {registers[0]}, {registers[1]}, {registers[0]}",
             f"return-object {registers[0]}",
             ":catch_number_type",
-            f"sget-object {registers[1]}, {method.parent.class_name};->SHADER_LIST:[Ljava/lang/String;",
+            f"sget-object {registers[1]}, {method.parent.class_name}->SHADER_LIST:[Ljava/lang/String;",
             f"const {registers[0]}, 0x0",
             f"aget-object {registers[0]}, {registers[1]}, {registers[0]}",
             f"return-object {registers[0]}",
@@ -455,7 +465,7 @@ def patch_services_jar():
                         ),
                         action = lambda inst: inst.expand_after([
                             f"move-object/from16 {inst.registers[0]}, p0",
-                            f"iput {inst.registers[1]}, {inst.registers[0]}, {inst.parent.parent.class_name};->mChangedBrightnessValue:F"
+                            f"iput {inst.registers[1]}, {inst.registers[0]}, {inst.parent.parent.class_name}->mChangedBrightnessValue:F"
                         ])
                     ),
                     InstructionPatch(
@@ -468,7 +478,7 @@ def patch_services_jar():
                         ),
                         action = lambda inst: inst.expand_after([
                             f"const/4 {inst.registers[0]}, 0x0",
-                            f"iput {inst.registers[0]}, {inst.registers[1]}, {inst.parent.parent.class_name};->mChangedBrightnessValue:F"
+                            f"iput {inst.registers[0]}, {inst.registers[1]}, {inst.parent.parent.class_name}->mChangedBrightnessValue:F"
                         ])
                     ),
                     InstructionPatch(
@@ -482,7 +492,39 @@ def patch_services_jar():
                         ),
                         action = patch_updatePowerStateInternal,
                     ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            return_type = "V",
+                            method = "end",
+                            class_name = Matcher.regex(r".*ObjectAnimator;?"),
+                        ),
+                        action = lambda inst: inst.prev_known().field_name == 'mColorFadeOffAnimator' and setattr(inst, 'method', 'start')
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            return_type = "V",
+                            method = "start",
+                            class_name = Matcher.regex(r".*android/animation/(Object|Value)Animator;?"),
+                        ),
+                        action = patch_OverrideAnimatorScale
+                    ),
                 ]
+            ),
+            FilePatch(
+                file_patterns = [r".*[Ww]allpaper.*\.smali"],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            return_type = "V",
+                            method = "start",
+                            class_name = Matcher.regex(r".*android/animation/(Object|Value)Animator;?"),
+                        ),
+                        action = patch_OverrideAnimatorScale
+                    ),
+                ],
             ),
             FilePatch(
                 file_patterns = [r"ColorDisplayService\$.*[Nn]ight[Dd]isplay.*\.smali"],
@@ -608,18 +650,32 @@ def patch_systemui():
         next_instruction = instruction.next_known()
         registers = next_instruction.next.get_n_free_registers(1)
         next_instruction.expand_after([
-            f'iget-boolean {registers[0]}, {instruction.registers[0]}, {instruction.parent.parent.class_name};->mInAmbientMode:Z',
-            f'if-eqz {registers[0]}, :ambient_cond_{wallpaper_flag_count}',
+            f'iget-boolean {registers[0]}, {instruction.registers[0]}, {instruction.parent.parent.class_name}->mInAmbientMode:Z',
+            f'if-eqz {registers[0]}, :ambient_cond_{wallpaper_flag_count}_normal',
+            f'const {registers[0]}, 0x1',
+            f'if-ne {registers[0]}, {next_instruction.registers[0]}, :ambient_cond_{wallpaper_flag_count}_normal',
             f'const {next_instruction.registers[0]}, 0x2',
-            f':ambient_cond_{wallpaper_flag_count}',
+            f':ambient_cond_{wallpaper_flag_count}_normal',
         ])
         wallpaper_flag_count+=1
+
+    def patch_UnlockedScreenOffAnimationController(instruction):
+        invoke_instruction = instruction.next_known()
+        if invoke_instruction.instruction_type != InstructionType.METHOD_INVOKE or len(invoke_instruction.registers) == 0 or invoke_instruction.registers[-1] != instruction.registers[0]:
+            return
+        result_instruction = invoke_instruction.next_known()
+        if result_instruction.instruction_type != InstructionType.MOVE_RESULT:
+            return
+        if "object" in result_instruction.modifier:
+            result_instruction.insert_after(f"const-string {result_instruction.registers[0]}, \"1\"")
+        else:
+            result_instruction.insert_after(f"const {result_instruction.registers[0]}, 0x3f800000")
 
     def patch_ImageWallpaperInit(method):
         registers = method.first_instruction.next.get_n_free_registers(1)
         method.first_instruction.expand_after([
             f'const/4 {registers[0]}, 0x0',
-            f'iput-boolean {registers[0]}, p0, {method.parent.class_name};->mInAmbientMode:Z',
+            f'iput-boolean {registers[0]}, p0, {method.parent.class_name}->mInAmbientMode:Z',
         ])
 
     def patch_ImageWallpaperEngine(smali_file):
@@ -631,34 +687,27 @@ def patch_systemui():
                 smali_file.smali_class,
                 initial_instructions = [
                     '.locals 7',
-                    f'iget-object v5, p0, Lcom/android/systemui/wallpapers/ImageWallpaper$CanvasEngine;->mLock:Ljava/lang/Object;',
+                    f'iget-object v5, p0, {smali_file.smali_class.class_name}->mLock:Ljava/lang/Object;',
                     'monitor-enter v5',
-                    f'iget-boolean p2, p0, {smali_file.smali_class.class_name};->mInAmbientMode:Z',
+                    f'iget-boolean p2, p0, {smali_file.smali_class.class_name}->mInAmbientMode:Z',
                     'if-eq p1, p2, :cond_no_update',
-                    f'iput-boolean p1, p0, {smali_file.smali_class.class_name};->mInAmbientMode:Z',
-                    f'iget-object v0, p0, {smali_file.smali_class.class_name};->mWallpaperManager:Landroid/app/WallpaperManager;',
-                    f'iget-object v1, p0, {smali_file.smali_class.class_name};->this$0:{smali_file.smali_class.class_name.rsplit("$", 1)[0]};',
+                    f'iput-boolean p1, p0, {smali_file.smali_class.class_name}->mInAmbientMode:Z',
+                    f'iget-object v0, p0, {smali_file.smali_class.class_name}->mWallpaperManager:Landroid/app/WallpaperManager;',
+                    f'iget-object v1, p0, {smali_file.smali_class.class_name}->this$0:{smali_file.smali_class.class_name.rsplit("$", 1)[0]};',
                     f'iget-object v1, v1, {smali_file.smali_class.class_name.rsplit("$", 1)[0]};->mUserTracker:Lcom/android/systemui/settings/UserTracker;',
                     'check-cast v1, Lcom/android/systemui/settings/UserTrackerImpl;',
                     'invoke-virtual {v1}, Lcom/android/systemui/settings/UserTrackerImpl;->getUserId()I',
                     'move-result v1',
                     'const v2, 0x0',
                     'const v4, 0x1',
-                    'const v3, 0x1',
-                    'if-eqz p1, :is_not_ambient',
-                    'const v3, 0x2',
-                    'goto :is_ambient'
-                    ':is_not_ambient',
-                    f'invoke-virtual {{p0}}, {smali_file.smali_class.class_name};->getWallpaperFlags()I',
-                    'move-result v6',
-                    'const v3, 0x2',
-                    'if-eq v3, v6, :is_ambient',
-                    'const v3, 0x1',
-                    ':is_ambient',
+                    f'invoke-virtual {{p0}}, {smali_file.smali_class.class_name}->getWallpaperFlags()I',
+                    'move-result v3',
+                    'const v6, 0x3',
+                    'if-eq v6, v3, :cond_no_update',
                     'invoke-virtual {v0, v1, v2, v3, v4}, Landroid/app/WallpaperManager;->getBitmapAsUser(IZIZ)Landroid/graphics/Bitmap;',
                     'move-result-object v0',
-                    'iput-object v0, p0, Lcom/android/systemui/wallpapers/ImageWallpaper$CanvasEngine;->mBitmap:Landroid/graphics/Bitmap;',
-                    f'invoke-virtual {{p0, v0}}, {smali_file.smali_class.class_name};->drawFrameOnCanvas(Landroid/graphics/Bitmap;)V',
+                    'if-eqz v0, :cond_no_update',
+                    f'invoke-virtual {{p0, v0}}, {smali_file.smali_class.class_name}->drawFrameOnCanvas(Landroid/graphics/Bitmap;)V',
                     ':cond_no_update',
                     'monitor-exit v5',
                     'return-void',
@@ -676,14 +725,22 @@ def patch_systemui():
             MethodDetails(name = "<init>", return_type = "V"),
             action = patch_ImageWallpaperInit,
         )
-        smali_file.smali_class.for_instruction(
-            InstructionDetails(instruction_type = InstructionType.FIELD_READ, field_name = "mIsLockscreenLiveWallpaperEnabled"),
-            action = lambda inst: inst.replace(f'const/4 {inst.registers[0]}, 0x1'),
-        )
 
     JarPatcher(
         "d/system/system_ext/priv-app/SystemUI/SystemUI.apk",
         [
+            FilePatch(
+                file_patterns = [r"UnlockedScreenOffAnimationController.*\.smali"],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.CONSTANT,
+                            constant_value = Matcher.regex(rf'(?i)"?animator_duration_scale"?'),
+                        ),
+                        action = patch_UnlockedScreenOffAnimationController,
+                    ),
+                ],
+            ),
             FilePatch(
                 file_patterns = [r".*Clock.*\.smali"],
                 patches = [
@@ -774,6 +831,25 @@ def patch_systemui():
                         )
                     ) for (enum, key, value) in scrim_enum_triples
                 )
+            ),
+            FilePatch(
+                file_patterns = [
+                    r".*[Ww]allpaper.*\.smali",
+                    r".*[Kk]eyguard.*\.smali",
+                    r".*[Ss]crim.*\.smali",
+                    r".*([Ss]tatus|[Ll]ight)[Bb]ar.*\.smali",
+                ],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            return_type = "V",
+                            method = "start",
+                            class_name = Matcher.regex(r".*android/animation/(Object|Value)Animator;?"),
+                        ),
+                        action = patch_OverrideAnimatorScale
+                    ),
+                ],
             ),
             FilePatch(
                 file_patterns = [r".*KeyguardViewMediator.*\.smali"],

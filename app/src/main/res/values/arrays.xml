@@ -62,8 +62,8 @@
         <item>0</item>
     </string-array>
     <string-array name="static_lockscreen_color_options">
-        <item>White Logo on Black Background</item>
         <item>Black Logo on White Background</item>
+        <item>White Logo on Black Background</item>
     </string-array>
     <string-array name="static_lockscreen_color_values">
         <item>1</item>

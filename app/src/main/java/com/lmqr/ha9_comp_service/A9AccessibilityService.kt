@@ -121,6 +121,7 @@ class A9AccessibilityService : AccessibilityService(),
         registerReceiver(receiverEink, filterEink, RECEIVER_EXPORTED)
 
         updateColorScheme(sharedPreferences)
+        updateStaticLockscreen(sharedPreferences)
     }
 
     override fun onInterrupt() {
