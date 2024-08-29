@@ -91,6 +91,14 @@
             app:defaultValue="0"
             app:dialogTitle="Choose Static Lockscreen Icon Opacity" />
 
+        <ListPreference
+            app:key="override_max_brightness"
+            app:title="Override Max Brightness"
+            app:entries="@array/max_brightness_tiers"
+            app:entryValues="@array/max_brightness_tiers_values"
+            app:defaultValue="2000"
+            app:dialogTitle="Choose Max Brightness" />
+
     </PreferenceCategory>
 
 
@@ -101,7 +109,7 @@
 
         <SwitchPreferenceCompat
             app:key="refresh_on_lock"
-            app:title="Refresh Screen on Lock" />
+            app:title="Set Refresh Mode to Clear on Lock" />
 
         <SwitchPreferenceCompat
             app:key="disable_perapprefresh"

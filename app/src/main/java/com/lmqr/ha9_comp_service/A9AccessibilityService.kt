@@ -54,7 +54,7 @@ class A9AccessibilityService : AccessibilityService(),
                     menuBinding.close()
                     if (sharedPreferences.getBoolean("refresh_on_lock", false))
                         handler.postDelayed({
-                            commandRunner.runCommands(arrayOf(Commands.FORCE_CLEAR))
+                            commandRunner.runCommands(arrayOf(Commands.SPEED_CLEAR))
                         }, 150)
                 }
                 Intent.ACTION_SCREEN_ON -> {
@@ -122,6 +122,7 @@ class A9AccessibilityService : AccessibilityService(),
 
         updateColorScheme(sharedPreferences)
         updateStaticLockscreen(sharedPreferences)
+        updateMaxBrightness(sharedPreferences)
     }
 
     override fun onInterrupt() {
@@ -363,8 +364,21 @@ class A9AccessibilityService : AccessibilityService(),
         }
     }
 
+    private fun updateMaxBrightness(sharedPreferences: SharedPreferences) = sharedPreferences.run {
+        try{
+            val brightness = Integer.parseInt(getString("override_max_brightness", "2000")?:"2000")
+            commandRunner.runCommands(arrayOf("smb$brightness"))
+        } catch (e: NumberFormatException) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
+            "override_max_brightness" -> {
+                sharedPreferences?.let { updateMaxBrightness(it) }
+            }
+
             "static_lockscreen_opacity", "static_lockscreen_type", "static_lockscreen_bg_opacity", "static_lockscreen_mix_color" -> {
                 sharedPreferences?.let { updateStaticLockscreen(it) }
             }

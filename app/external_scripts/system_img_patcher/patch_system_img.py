@@ -164,7 +164,22 @@ def patch_services_jar():
             f'move-result {registers[1]}',
 
             f'iget {registers[2]}, p0, {instruction.class_name}->mChangedBrightnessValue:F',
+            f'const-string {registers[3]}, "sys.linevibrator_touch"',
+            f'invoke-static {{{registers[3]}}}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+            f'move-result-object {registers[3]}',
+            ":try_number_type_start",
+            f"invoke-static {{{registers[3]}}}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I",
+            f"move-result {registers[3]}",
+            ":try_number_type_end",
+            ".catchall {:try_number_type_start .. :try_number_type_end} :catch_wrong_number",
+            f"if-ltz {registers[3]}, :catch_wrong_number",
+            f"const {registers[4]}, {hex(2201)}",
+            f"if-ge {registers[3]}, {registers[4]}, :catch_wrong_number",
+            f'int-to-float {registers[3]}, {registers[3]}',
+            'goto :on_valid_number',
+            ':catch_wrong_number',
             f'const {registers[3]}, {max_brightness_value}',
+            ':on_valid_number',
             f'mul-float {registers[2]}, {registers[2]}, {registers[3]}', # registers[2] = mChangedBrightnessValue * MAX
 
             f'mul-float {registers[4]}, {registers[2]}, {registers[1]}', # registers[4] = mChangedBrightnessValue * MAX * getColorTemperature()F
