@@ -56,6 +56,10 @@
             app:defaultValue="dummy"
             app:dialogTitle="Choose an action for long press when screen is off" />
 
+        <SwitchPreferenceCompat
+            app:key="show_per_app_aod_settings"
+            app:title="Show static AOD settings in Pop-up" />
+
         <ListPreference
             app:key="static_lockscreen_type"
             app:title="Set Static Lockscreen Icon"

@@ -42,6 +42,7 @@ class A9AccessibilityService : AccessibilityService(),
     SharedPreferences.OnSharedPreferenceChangeListener {
     private lateinit var commandRunner: CommandRunner
     private lateinit var refreshModeManager: RefreshModeManager
+    private lateinit var staticAODOpacityManager: StaticAODOpacityManager
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var buttonActionManager: ButtonActionManager
     private var isScreenOn = true
@@ -104,6 +105,12 @@ class A9AccessibilityService : AccessibilityService(),
             sharedPreferences,
             commandRunner
         )
+        staticAODOpacityManager = StaticAODOpacityManager(
+            sharedPreferences,
+            commandRunner,
+            resources.getStringArray(R.array.static_lockscreen_opacity_values).map(Integer::parseInt).toIntArray(),
+            resources.getStringArray(R.array.static_lockscreen_bg_opacity_values).map(Integer::parseInt).toIntArray(),
+        )
 
         buttonActionManager = ButtonActionManager(commandRunner)
 
@@ -121,7 +128,7 @@ class A9AccessibilityService : AccessibilityService(),
         registerReceiver(receiverEink, filterEink, RECEIVER_EXPORTED)
 
         updateColorScheme(sharedPreferences)
-        updateStaticLockscreen(sharedPreferences)
+        staticAODOpacityManager.applyMode()
         updateMaxBrightness(sharedPreferences)
     }
 
@@ -221,6 +228,14 @@ class A9AccessibilityService : AccessibilityService(),
                         else -> "OFF"
                     }
                     updateButtons(refreshModeManager.currentMode)
+                    val staticAodVisibility =
+                        if(sharedPreferences.getBoolean("show_per_app_aod_settings", false))
+                            View.VISIBLE
+                        else
+                            View.GONE
+                    staticAodText.visibility = staticAodVisibility
+                    staticAodLinearLayout.visibility = staticAodVisibility
+                    updateButtons(staticAODOpacityManager.currentOpacity)
                 }
             } ?: run {
 
@@ -262,6 +277,30 @@ class A9AccessibilityService : AccessibilityService(),
                         refreshModeManager.changeMode(RefreshMode.SPEED)
                         updateButtons(refreshModeManager.currentMode)
                     }
+
+                    buttonTransparent.setOnClickListener{
+                        staticAODOpacityManager.changeMode(AODOpacity.CLEAR)
+                        updateButtons(staticAODOpacityManager.currentOpacity)
+                    }
+                    buttonSemiTransparent.setOnClickListener{
+                        staticAODOpacityManager.changeMode(AODOpacity.SEMICLEAR)
+                        updateButtons(staticAODOpacityManager.currentOpacity)
+                    }
+                    buttonSemiOpaque.setOnClickListener{
+                        staticAODOpacityManager.changeMode(AODOpacity.SEMIOPAQUE)
+                        updateButtons(staticAODOpacityManager.currentOpacity)
+                    }
+                    buttonOpaque.setOnClickListener{
+                        staticAODOpacityManager.changeMode(AODOpacity.OPAQUE)
+                        updateButtons(staticAODOpacityManager.currentOpacity)
+                    }
+                    val staticAodVisibility =
+                        if(sharedPreferences.getBoolean("show_per_app_aod_settings", false))
+                            View.VISIBLE
+                        else
+                            View.GONE
+                    staticAodText.visibility = staticAodVisibility
+                    staticAodLinearLayout.visibility = staticAodVisibility
 
                     settingsIcon.setOnClickListener {
                         val settingsIntent = Intent(
@@ -312,6 +351,7 @@ class A9AccessibilityService : AccessibilityService(),
                     }
 
                     updateButtons(refreshModeManager.currentMode)
+                    updateButtons(staticAODOpacityManager.currentOpacity)
 
                     wm.addView(root, layoutParams)
                 }
@@ -341,6 +381,8 @@ class A9AccessibilityService : AccessibilityService(),
                 packageManager.getActivityInfo(componentName, 0)
                 refreshModeManager.onAppChange(pkgName)
                 menuBinding.updateButtons(refreshModeManager.currentMode)
+                staticAODOpacityManager.onAppChange(pkgName)
+                menuBinding.updateButtons(staticAODOpacityManager.currentOpacity)
             } catch (_: PackageManager.NameNotFoundException) {
             }
         }
@@ -350,18 +392,6 @@ class A9AccessibilityService : AccessibilityService(),
         val type = getString("color_scheme_type", "5")
         val colorString = getInt("color_scheme_color", 20).progressToHex()
         commandRunner.runCommands(arrayOf("theme $type $colorString"))
-    }
-
-    private fun updateStaticLockscreen(sharedPreferences: SharedPreferences) = sharedPreferences.run {
-        try{
-            val op = Integer.parseInt(getString("static_lockscreen_opacity", "0")?:"0")
-            val tp = Integer.parseInt(getString("static_lockscreen_type", "0")?:"0")
-            val bgop = Integer.parseInt(getString("static_lockscreen_bg_opacity", "0")?:"0")
-            val mix = Integer.parseInt(getString("static_lockscreen_mix_color", "0")?:"0")
-            commandRunner.runCommands(arrayOf("stl${op + tp + mix + bgop}"))
-        } catch (e: NumberFormatException) {
-            e.printStackTrace()
-        }
     }
 
     private fun updateMaxBrightness(sharedPreferences: SharedPreferences) = sharedPreferences.run {
@@ -380,7 +410,7 @@ class A9AccessibilityService : AccessibilityService(),
             }
 
             "static_lockscreen_opacity", "static_lockscreen_type", "static_lockscreen_bg_opacity", "static_lockscreen_mix_color" -> {
-                sharedPreferences?.let { updateStaticLockscreen(it) }
+                staticAODOpacityManager.applyMode()
             }
 
             "color_scheme_type", "color_scheme_color" -> {
@@ -422,6 +452,17 @@ fun FloatingMenuLayoutBinding?.updateButtons(mode: RefreshMode) = this?.run {
         RefreshMode.SMOOTH -> button3
         RefreshMode.SPEED -> button4
     }.select()
+}
+
+fun FloatingMenuLayoutBinding?.updateButtons(mode: AODOpacity) = this?.run {
+    listOf(buttonTransparent, buttonSemiTransparent, buttonSemiOpaque, buttonOpaque).forEach(Button::deselect)
+    when (mode) {
+        AODOpacity.CLEAR-> buttonTransparent
+        AODOpacity.SEMICLEAR -> buttonSemiTransparent
+        AODOpacity.SEMIOPAQUE -> buttonSemiOpaque
+        AODOpacity.OPAQUE -> buttonOpaque
+        else -> null
+    }?.select()
 }
 
 fun Button.deselect() {
