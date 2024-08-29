@@ -8,7 +8,7 @@
     <string name="clear">Clear</string>
     <string name="refresh_mode">Refresh Mode</string>
     <string name="static_aod_opacity">Static AOD Opacity</string>
-    <string name="opaque">OPAQUE</string>
-    <string name="semiopaque">SMIOPAQUE</string>
-    <string name="semiclear">SMICLEAR</string>
+    <string name="opaque">Opaque</string>
+    <string name="semiopaque">Semiopaque</string>
+    <string name="semiclear">Semiclear</string>
 </resources>
