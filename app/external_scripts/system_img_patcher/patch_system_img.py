@@ -445,6 +445,15 @@ def patch_services_jar():
             f"sub-float {instruction.registers[0]}, {register}, {instruction.registers[0]}",
         ])
 
+    def patch_AddFadeOffInterpolator(instruction):
+        registers = instruction.get_n_free_registers(2)
+        instruction.expand_after([
+            f"new-instance {registers[0]}, Landroid/view/animation/DecelerateInterpolator;",
+            f"const {registers[1]}, 0x40800000",
+            f"invoke-direct {{{registers[0]}, {registers[1]}}}, Landroid/view/animation/DecelerateInterpolator;-><init>(F)V",
+            f"invoke-virtual {{{instruction.registers[0]}, {registers[0]}}}, Landroid/animation/ObjectAnimator;->setInterpolator(Landroid/animation/TimeInterpolator;)V",
+        ])
+
     JarPatcher(
         "d/system/framework/services.jar",
         [
@@ -482,6 +491,13 @@ def patch_services_jar():
                             f"move-object/from16 {inst.registers[0]}, p0",
                             f"iput {inst.registers[1]}, {inst.registers[0]}, {inst.parent.parent.class_name}->mChangedBrightnessValue:F"
                         ])
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_WRITE,
+                            field_name = "mColorFadeOffAnimator",
+                        ),
+                        action = patch_AddFadeOffInterpolator
                     ),
                     InstructionPatch(
                         method = MethodDetails(
