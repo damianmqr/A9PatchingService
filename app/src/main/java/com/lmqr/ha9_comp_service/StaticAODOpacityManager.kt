@@ -66,7 +66,7 @@ class StaticAODOpacityManager(
                     if(currentOpacity == AODOpacity.NOTSET)
                         Integer.parseInt(getString("static_lockscreen_bg_opacity", "0") ?: "0")
                     else
-                        backgroundOpacityArray[min(currentOpacity.mode, iconOpacityArray.size-1)]
+                        backgroundOpacityArray[min(currentOpacity.mode, backgroundOpacityArray.size-1)]
                 val mix = Integer.parseInt(getString("static_lockscreen_mix_color", "0") ?: "0")
                 commandRunner.runCommands(arrayOf("stl${op + tp + mix + bgop}"))
             }
