@@ -78,6 +78,6 @@ class StaticAODOpacityManager(
 
 private fun String.toSharedPreferencesKey(): String {
     if (startsWith("package:"))
-            return this
-        return "package:$this"
+            return "static-aod:$this"
+    return "static-aod:package:$this"
 }

@@ -66,7 +66,7 @@ class RefreshModeManager(
         }
     }
 
-    private fun applyMode() {
+    fun applyMode() {
         commandRunner.runCommands(
             arrayOf(currentMode.command)
         )

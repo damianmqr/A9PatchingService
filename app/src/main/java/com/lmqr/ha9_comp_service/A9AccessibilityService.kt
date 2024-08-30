@@ -60,6 +60,8 @@ class A9AccessibilityService : AccessibilityService(),
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
+                    if (sharedPreferences.getBoolean("refresh_on_lock", false))
+                        refreshModeManager.applyMode()
                 }
             }
         }
