@@ -29,6 +29,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import android.widget.SeekBar
+import android.widget.TextView
 import androidx.preference.PreferenceManager
 import com.lmqr.ha9_comp_service.button_mapper.ButtonActionManager
 import com.lmqr.ha9_comp_service.command_runners.CommandRunner
@@ -131,6 +132,7 @@ class A9AccessibilityService : AccessibilityService(),
 
         updateColorScheme(sharedPreferences)
         staticAODOpacityManager.applyMode()
+        staticAODOpacityManager.applyReader()
         updateMaxBrightness(sharedPreferences)
     }
 
@@ -235,9 +237,10 @@ class A9AccessibilityService : AccessibilityService(),
                             View.VISIBLE
                         else
                             View.GONE
+                    enableReaderModeText.setIsReader(staticAODOpacityManager.isReader)
                     staticAodText.visibility = staticAodVisibility
                     staticAodLinearLayout.visibility = staticAodVisibility
-                    updateButtons(staticAODOpacityManager.currentOpacity)
+                    updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
                 }
             } ?: run {
 
@@ -282,19 +285,19 @@ class A9AccessibilityService : AccessibilityService(),
 
                     buttonTransparent.setOnClickListener{
                         staticAODOpacityManager.changeMode(AODOpacity.CLEAR)
-                        updateButtons(staticAODOpacityManager.currentOpacity)
+                        updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
                     }
                     buttonSemiTransparent.setOnClickListener{
                         staticAODOpacityManager.changeMode(AODOpacity.SEMICLEAR)
-                        updateButtons(staticAODOpacityManager.currentOpacity)
+                        updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
                     }
                     buttonSemiOpaque.setOnClickListener{
                         staticAODOpacityManager.changeMode(AODOpacity.SEMIOPAQUE)
-                        updateButtons(staticAODOpacityManager.currentOpacity)
+                        updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
                     }
                     buttonOpaque.setOnClickListener{
                         staticAODOpacityManager.changeMode(AODOpacity.OPAQUE)
-                        updateButtons(staticAODOpacityManager.currentOpacity)
+                        updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
                     }
                     val staticAodVisibility =
                         if(sharedPreferences.getBoolean("show_per_app_aod_settings", false))
@@ -313,6 +316,14 @@ class A9AccessibilityService : AccessibilityService(),
                         close()
                         startActivity(settingsIntent)
                     }
+
+                    enableReaderModeText.run{
+                        setOnClickListener{
+                            setIsReader(staticAODOpacityManager.toggleIsReader())
+                            updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
+                        }
+                    }
+                    enableReaderModeText.setIsReader(staticAODOpacityManager.isReader)
 
                     lightSeekbar.min = 0
                     lightSeekbar.max = 254
@@ -353,7 +364,7 @@ class A9AccessibilityService : AccessibilityService(),
                     }
 
                     updateButtons(refreshModeManager.currentMode)
-                    updateButtons(staticAODOpacityManager.currentOpacity)
+                    updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
 
                     wm.addView(root, layoutParams)
                 }
@@ -384,7 +395,7 @@ class A9AccessibilityService : AccessibilityService(),
                 refreshModeManager.onAppChange(pkgName)
                 menuBinding.updateButtons(refreshModeManager.currentMode)
                 staticAODOpacityManager.onAppChange(pkgName)
-                menuBinding.updateButtons(staticAODOpacityManager.currentOpacity)
+                menuBinding.updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
             } catch (_: PackageManager.NameNotFoundException) {
             }
         }
@@ -456,15 +467,16 @@ fun FloatingMenuLayoutBinding?.updateButtons(mode: RefreshMode) = this?.run {
     }.select()
 }
 
-fun FloatingMenuLayoutBinding?.updateButtons(mode: AODOpacity) = this?.run {
+fun FloatingMenuLayoutBinding?.updateButtons(mode: AODOpacity, isReader: Boolean) = this?.run {
     listOf(buttonTransparent, buttonSemiTransparent, buttonSemiOpaque, buttonOpaque).forEach(Button::deselect)
-    when (mode) {
-        AODOpacity.CLEAR-> buttonTransparent
-        AODOpacity.SEMICLEAR -> buttonSemiTransparent
-        AODOpacity.SEMIOPAQUE -> buttonSemiOpaque
-        AODOpacity.OPAQUE -> buttonOpaque
-        else -> null
-    }?.select()
+    if(!isReader)
+        when (mode) {
+            AODOpacity.CLEAR-> buttonTransparent
+            AODOpacity.SEMICLEAR -> buttonSemiTransparent
+            AODOpacity.SEMIOPAQUE -> buttonSemiOpaque
+            AODOpacity.OPAQUE -> buttonOpaque
+            else -> null
+        }?.select()
 }
 
 fun Button.deselect() {
@@ -475,4 +487,16 @@ fun Button.deselect() {
 fun Button.select() {
     setBackgroundResource(R.drawable.drawable_border_pressed)
     setTextColor(Color.WHITE)
+}
+
+fun TextView.setIsReader(isReader: Boolean) {
+    text = if(isReader)
+        "ON"
+    else
+        "OFF"
+    val endDrawableId = if(isReader)
+        R.drawable.baseline_book_24
+    else
+        R.drawable.baseline_book_closed_24
+    setCompoundDrawablesWithIntrinsicBounds(0, 0, endDrawableId, 0)
 }

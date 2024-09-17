@@ -172,7 +172,9 @@ def patch_services_jar():
             f"move-result {registers[3]}",
             ":try_number_type_end",
             ".catchall {:try_number_type_start .. :try_number_type_end} :catch_wrong_number",
-            f"if-ltz {registers[3]}, :catch_wrong_number",
+            f"if-gez {registers[3]}, :skip_zero",
+            f"const {registers[3]}, 0x0",
+            ":skip_zero",
             f"const {registers[4]}, {hex(2201)}",
             f"if-ge {registers[3]}, {registers[4]}, :catch_wrong_number",
             f'int-to-float {registers[3]}, {registers[3]}',
@@ -310,7 +312,7 @@ def patch_services_jar():
         op_name = str(opacity).replace('.', '_')
         return format_eval(content, center_x = center_x, center_y = center_y, opacity = opacity, radius = radius, bg_opacity = bg_opacity, mix_color = mix_color, bg_mix_color = 1.0 - mix_color)
 
-    shaders = [get_shader_variant(name, centered, opacity, bg_opacity, mix_color) for name in ["color_fade_frag", "color_fade_frag_pause"] for centered in [True, False] for opacity in [0.91, 0.67, 0.4] for bg_opacity in [1.0, 0.6, 0.2, 0.0] for mix_color in [1.0, 0.0] ]
+    shaders = [get_shader_variant(name, centered, opacity, bg_opacity, mix_color) for name in ["color_fade_frag", "color_fade_frag_pause"] for centered in [True, False] for opacity in [0.91, 0.67, 0.25] for bg_opacity in [1.0, 0.6, 0.2, 0.0] for mix_color in [1.0, 0.0] ]
     def find_resource_id(public_xml_path, resource_name, resource_type):
         tree = ET.parse(public_xml_path)
         root = tree.getroot()
@@ -454,9 +456,216 @@ def patch_services_jar():
             f"invoke-virtual {{{instruction.registers[0]}, {registers[0]}}}, Landroid/animation/ObjectAnimator;->setInterpolator(Landroid/animation/TimeInterpolator;)V",
         ])
 
+    def patch_interceptKeyBeforeQueueing(method):
+        first_instruction = method.first_instruction
+        first_instruction.expand_after([
+            'move-object/from16 v0, p0',
+            'move-object/from16 v1, p1',
+            f'invoke-direct {{v0, v1}}, {method.parent.class_name}->handleWakeUpOnVolume(Landroid/view/KeyEvent;)V',
+        ])
+        method.parent.items.append((
+                    'method',
+                    SmaliMethod(
+                        '.method private handleWakeUpOnVolume(Landroid/view/KeyEvent;)V',
+                        method.parent,
+                        initial_instructions = [
+                            '.locals 4',
+
+                            'invoke-virtual {p1}, Landroid/view/KeyEvent;->getKeyCode()I',
+                            'move-result v0',
+                            'const v1, 0x18',
+                            'if-eq v0, v1, :is_volume_event',
+                            'const v1, 0x19',
+                            'if-eq v0, v1, :is_volume_event',
+                            'const v1, 0x1a',
+                            'if-eq v0, v1, :remove_messages',
+                            'goto :return_no_action',
+
+                            ':is_volume_event',
+                            'const-string v0, "sys.wakeup_on_volume"',
+                            'invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+                            'move-result-object v0',
+                            'const-string v1, "1"',
+                            'invoke-virtual {v1, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z',
+                            'move-result v0',
+                            'if-eqz v0, :return_no_action',
+
+                            'invoke-virtual {p1}, Landroid/view/KeyEvent;->getAction()I',
+                            'move-result v0',
+                            'if-eqz v0, :acquire_wl',
+                            'const v1, 0x1',
+                            'if-eq v0, v1, :release_wl',
+                            'goto :return_no_action',
+
+                            ':acquire_wl',
+                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mPowerManager:Landroid/os/PowerManager;',
+                            'invoke-virtual {v0}, Landroid/os/PowerManager;->isInteractive()Z',
+                            'move-result v1',
+                            'if-nez v1, :return_no_action',
+
+                            'const-string v2, "sys.linevibrator_touch"',
+                            'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+                            'move-result-object v0',
+                            ':try_number_type_start',
+                            'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
+                            'move-result v0',
+                            ':try_number_type_end',
+                            '.catchall {:try_number_type_start .. :try_number_type_end} :continue_acquire',
+                            'if-lez v0, :continue_acquire',
+                            'const v1, 0x0',
+                            'sub-int v0, v1, v0',
+                            'new-instance v1, Ljava/lang/StringBuilder;',
+                            'invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V',
+                            'invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;',
+                            'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
+                            'move-result-object v1',
+                            'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+                            ':continue_acquire',
+
+                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+                            f'const-wide v1, {hex(5000)}',
+                            'invoke-virtual {v0, v1, v2}, Landroid/os/PowerManager$WakeLock;->acquire(J)V',
+                            ':remove_messages',
+                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mHandler:Landroid/os/Handler;',
+                            f'const v1, {hex(595)}',
+                            'invoke-virtual {v0, v1}, Landroid/os/Handler;->removeMessages(I)V',
+                            f'const v1, {hex(596)}',
+                            'invoke-virtual {v0, v1}, Landroid/os/Handler;->removeMessages(I)V',
+                            'return-void',
+
+                            ':release_wl',
+                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+                            'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->isHeld()Z',
+                            'move-result v1',
+                            'if-eqz v1, :fix_backlight',
+                            'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->release()V',
+
+                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mHandler:Landroid/os/Handler;',
+                            f'const v1, {hex(595)}',
+                            f'const-wide v2, {hex(500)}',
+                            'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
+                            f'const v1, {hex(596)}',
+                            f'const-wide v2, {hex(1550)}',
+                            'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
+                            'return-void',
+
+                            ':fix_backlight',
+                            'const-string v2, "sys.linevibrator_touch"',
+                            'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+                            'move-result-object v0',
+                            ':try_number_type_start_pre',
+                            'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
+                            'move-result v0',
+                            ':try_number_type_end_pre',
+                            '.catchall {:try_number_type_start_pre .. :try_number_type_end_pre} :return_no_action',
+                            'if-gez v0, :return_no_action',
+                            'const v1, 0x0',
+                            'sub-int v0, v1, v0',
+                            'new-instance v1, Ljava/lang/StringBuilder;',
+                            'invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V',
+                            'invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;',
+                            'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
+                            'move-result-object v1',
+                            'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+
+                            ':return_no_action',
+                            'return-void',
+                        ]
+                    )
+                ))
+
+    def patch_phoneWindowManagerInit(instruction):
+        registers = instruction.next.get_n_free_registers(2)
+        instruction.expand_after([
+            f'const {registers[0]}, 0x10000006',
+            f'const-string {registers[1]}, "Sys::VolumeWakeLock"',
+            f'invoke-virtual {{{instruction.registers[0]}, {registers[0]}, {registers[1]}}}, Landroid/os/PowerManager;->newWakeLock(ILjava/lang/String;)Landroid/os/PowerManager$WakeLock;',
+            f'move-result-object {registers[0]}',
+            f'iput-object {registers[0]}, {instruction.registers[1]}, Lcom/android/server/policy/PhoneWindowManager;->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+        ])
+
+    def patch_windowManagerHandler(method):
+        method.first_instruction.get_n_free_registers(4)
+        method.first_instruction.expand_after([
+            'iget v0, p1, Landroid/os/Message;->what:I',
+            f'const v1, {hex(596)}',
+            'if-ne v0, v1, :handle_go_to_sleep',
+
+            'const-string v2, "sys.linevibrator_touch"',
+            'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+            'move-result-object v0',
+            ':try_number_type_start_pre',
+            'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
+            'move-result v0',
+            ':try_number_type_end_pre',
+            '.catchall {:try_number_type_start_pre .. :try_number_type_end_pre} :handle_other_messages',
+            'if-gez v0, :handle_other_messages',
+            'const v1, 0x0',
+            'sub-int v0, v1, v0',
+            'new-instance v1, Ljava/lang/StringBuilder;',
+            'invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V',
+            'invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;',
+            'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
+            'move-result-object v1',
+            'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+
+            ':handle_go_to_sleep',
+            f'const v1, {hex(595)}',
+            'if-ne v0, v1, :handle_other_messages',
+            f'iget-object v0, p0, {method.parent.class_name}->this$0:Lcom/android/server/policy/PhoneWindowManager;',
+            'iget-object v1, v0, Lcom/android/server/policy/PhoneWindowManager;->mPowerManager:Landroid/os/PowerManager;',
+            'invoke-static {}, Landroid/os/SystemClock;->uptimeMillis()J',
+            'move-result-wide v2',
+            'invoke-virtual {v1, v2, v3}, Landroid/os/PowerManager;->goToSleep(J)V',
+
+            'return-void',
+            ':handle_other_messages',
+        ])
+
     JarPatcher(
         "d/system/framework/services.jar",
         [
+            FilePatch(
+                file_patterns = [r"PhoneWindowManager\.smali"],
+                patches = [
+                    InstructionPatch(
+                        method = "interceptKeyBeforeQueueing",
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_READ,
+                            field_name = Matcher.regex(r'm?[Hh]andle[Vv]olume[Kk]eys[Ii]n[Ww][Mm]'),
+                            data_type = "Z",
+                        ),
+                        action = lambda inst: inst.replace(f"const {inst.registers[0]}, 0x1")
+                    ),
+                    InstructionPatch(
+                        method = MethodDetails(
+                            name = Matcher.regex('<?init>?')
+                        ),
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_WRITE,
+                            field_name = Matcher.regex(r'm?[Pp]ower[Mm]anager$'),
+                            data_type = "Landroid/os/PowerManager;",
+                        ),
+                        action = patch_phoneWindowManagerInit
+                    ),
+                    InstructionPatch(
+                        method = "interceptKeyBeforeQueueing",
+                        action = patch_interceptKeyBeforeQueueing
+                    ),
+                    InstructionPatch(
+                        action = lambda file: file.smali_class.add_field(".field private mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;")
+                    ),
+                ],
+            ),
+            FilePatch(
+                file_patterns = [r"PhoneWindowManager[a-zA-Z0-9\$]+Handler\.smali"],
+                patches = [
+                    InstructionPatch(
+                        method = "handleMessage",
+                        action = patch_windowManagerHandler
+                    ),
+                ],
+            ),
             FilePatch(
                 file_patterns = [r"BatterySaverPolicy.*\.smali"],
                 patches = [
@@ -757,9 +966,68 @@ def patch_systemui():
             action = patch_ImageWallpaperInit,
         )
 
+    def patch_RemoveInvokeWithResult(instruction, result = "0x1"):
+        next_instruction = instruction.next_known()
+        instruction.remove()
+        if next_instruction.instruction_type == InstructionType.MOVE_RESULT:
+            next_instruction.replace(f'const {next_instruction.registers[0]}, {result}')
+
     JarPatcher(
         "d/system/system_ext/priv-app/SystemUI/SystemUI.apk",
         [
+            FilePatch(
+                file_patterns = [r"Doze(Sensors|Triggers).*\.smali"],
+                patches = [
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_WRITE,
+                            field_name = Matcher.regex(r"mListening((TouchScreen|Prox)\S*Sensors?)?"),
+                            data_type = "Z",
+                        ),
+                        action = lambda instruction: instruction.insert_before(f'const {instruction.registers[0]}, 0x0'),
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.FIELD_READ,
+                            field_name = Matcher.regex(r"mListening((TouchScreen|Prox)\S*Sensors?)?"),
+                            data_type = "Z",
+                        ),
+                        action = lambda instruction: instruction.replace(f'const {instruction.registers[0]}, 0x0'),
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"(register|resume)"),
+                            class_name = Matcher.regex(r'.*(Proximity|Threshold)Sensor;?'),
+                        ),
+                        action = lambda instruction: instruction.remove()
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"(add|remove)Callback"),
+                            class_name = Matcher.regex(r'.*DevicePostureController;?'),
+                        ),
+                        action = lambda instruction: instruction.remove()
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            method = Matcher.regex(r"(un)?register(Settings|Content)Observer(ForUser)?"),
+                            class_name = Matcher.regex(r'.*(Settings|Sensor);?'),
+                        ),
+                        action = lambda instruction: instruction.remove()
+                    ),
+                    InstructionPatch(
+                        instruction = InstructionDetails(
+                            instruction_type = InstructionType.METHOD_INVOKE,
+                            method = "requestTriggerSensor",
+                            class_name = Matcher.regex(r'.*SensorManager;?'),
+                        ),
+                        action = patch_RemoveInvokeWithResult
+                    ),
+                ],
+            ),
             FilePatch(
                 file_patterns = [r"UnlockedScreenOffAnimationController.*\.smali"],
                 patches = [
@@ -902,40 +1170,6 @@ def patch_systemui():
                     )
                 ]
             ),
-            FilePatch(
-                file_patterns = [r"Doze(Sensors|Triggers)\S*\.smali"],
-                patches = [
-                    InstructionPatch(
-                        instruction = InstructionDetails(
-                            instruction_type = InstructionType.FIELD_WRITE,
-                            field_name = Matcher.regex(r"mListening(TouchScreen|Prox)\S*Sensors?"),
-                            data_type = "Z",
-                        ),
-                        action = lambda instruction: instruction.insert_before(f'const {instruction.registers[0]}, 0x0'),
-                    ),
-                    InstructionPatch(
-                        instruction = InstructionDetails(
-                            instruction_type = InstructionType.FIELD_READ,
-                            field_name = Matcher.regex(r"mListening(TouchScreen|Prox)\S*Sensors?"),
-                            data_type = "Z",
-                        ),
-                        action = lambda instruction: instruction.replace(f'const {instruction.registers[0]}, 0x0'),
-                    ),
-                ],
-            ),
-            FilePatch(
-                file_patterns = [r"DozeSensors\.smali"],
-                patches = [
-                    InstructionPatch(
-                        instruction = InstructionDetails(
-                            instruction_type = InstructionType.METHOD_INVOKE,
-                            method = Matcher.regex(r"(register|resume)"),
-                            class_name = Matcher.regex(r'.*(Proximity|Threshold)Sensor;?'),
-                        ),
-                        action = lambda instruction: instruction.remove()
-                    ),
-                ],
-            ),
         ]
     ).patch(install = ["d/system/system_ext/priv-app/SystemUI/SystemUI.apk"], sign = True, api = 29)
 
@@ -1032,7 +1266,7 @@ def update_vndk_rc():
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/cmd overlay enable me.phh.treble.overlay.misc.aod_systemui\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/service call SurfaceFlinger 1008 i32 1\n",
         "    start a9_eink_server\n",
-        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/settings put secure enabled_accessibility_services com.lmqr.ha9_comp_service/.A9AccessibilityService\n",
+        "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/sh -c 'existing=$(/system/bin/settings get secure enabled_accessibility_services); new_service=\"com.lmqr.ha9_comp_service/.A9AccessibilityService\"; if ! echo \"$existing\" | /system/bin/grep -q -F \"$new_service\"; then if [ -n \"$existing\" ]; then updated=\"$existing:$new_service\"; else updated=\"$new_service\"; fi; /system/bin/settings put secure enabled_accessibility_services \"$updated\"; fi'\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/appops set com.lmqr.ha9_comp_service SYSTEM_ALERT_WINDOW allow\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chmod 444 /sys/class/leds/aw99703-bl-1/brightness\n",
         "    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/chmod 444 /sys/class/leds/aw99703-bl-2/brightness\n",
@@ -1099,6 +1333,10 @@ def main():
         replace_file("d/system/product/overlay/treble-overlay-Hisense-HLTE556N.apk")
         replace_file("d/system/bin/a9_eink_server", perms = 0o755, owner = "root:2000", secontext = "u:object_r:phhsu_exec:s0")
         replace_file("d/system/priv-app/a9service.apk")
+        replace_file("d/system/priv-app/org.fdroid.fdroid.privileged.apk")
+        replace_file("d/system/priv-app/com.google.android.gms.apk")
+        replace_file("d/system/priv-app/com.android.vending.apk")
+        replace_file("d/system/app/F-Droid.apk")
         replace_file("d/system/app/ims-caf-u.apk")
         replace_file("d/system/etc/hosts")
         update_build_prop()

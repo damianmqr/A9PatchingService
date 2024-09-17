@@ -134,11 +134,13 @@ class InstructionType(Enum):
             return any(map(self.matches, other))
         return other == self
 
-def run_command(command, check = True):
-    logging.info(f"Running command: {command}")
+def run_command(command, check = True, quiet = False):
+    if not quiet:
+        logging.info(f"Running command: {command}")
     try:
         result = subprocess.run(command, shell=True, check=check, capture_output=True, text=True)
-        logging.info(f"Command '{command}' executed successfully.")
+        if not quiet:
+            logging.info(f"Command '{command}' executed successfully.")
         return result.stdout
     except subprocess.CalledProcessError as e:
         logging.error(f"Error executing command '{command}': {e.stderr}")
@@ -558,6 +560,7 @@ class SmaliInstruction(SmaliPiece):
     def replace(self, instruction: 'SmaliInstruction'):
         if isinstance(instruction, str):
             if len(instruction.strip()) == 0:
+                self.remove()
                 return
             instruction = SmaliInstruction(instruction, self.parent)
         instruction.prev = self.prev

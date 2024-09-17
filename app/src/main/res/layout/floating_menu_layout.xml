@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="14dp"
     android:background="@drawable/inset_border_drawable"
     android:orientation="vertical">
+
     <LinearLayout
         android:id="@+id/linear_layout_top"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_gravity="center">
+
         <TextView
             android:layout_marginStart="25dp"
             android:layout_weight="1"
@@ -20,7 +23,7 @@
             android:textAlignment="center"
             android:textSize="15sp"
             android:textColor="@color/black"
-            android:text="@string/refresh_mode"/>
+            android:text="@string/refresh_mode" />
 
         <ImageView
             android:id="@+id/settings_icon"
@@ -29,6 +32,7 @@
             android:padding="2dp"
             android:src="@drawable/baseline_settings_24" />
     </LinearLayout>
+
     <LinearLayout
         android:id="@+id/linear_layout"
         android:layout_width="match_parent"
@@ -37,6 +41,7 @@
         android:orientation="horizontal"
         android:layout_gravity="center"
         android:padding="5dp">
+
         <Button
             android:id="@+id/button1"
             style="@style/MenuButtonStyle"
@@ -44,7 +49,7 @@
             android:layout_width="0dp"
             android:layout_height="35dp"
             android:layout_marginEnd="5dp"
-            android:text="@string/clear"/>
+            android:text="@string/clear" />
 
         <Button
             android:id="@+id/button2"
@@ -53,7 +58,8 @@
             android:layout_width="0dp"
             android:layout_height="35dp"
             android:layout_marginEnd="5dp"
-            android:text="@string/balanced"/>
+            android:text="@string/balanced" />
+
         <Button
             android:id="@+id/button3"
             style="@style/MenuButtonStyle"
@@ -61,7 +67,7 @@
             android:layout_width="0dp"
             android:layout_height="35dp"
             android:layout_marginEnd="5dp"
-            android:text="@string/smooth"/>
+            android:text="@string/smooth" />
 
         <Button
             android:id="@+id/button4"
@@ -69,17 +75,39 @@
             android:layout_weight="1"
             android:layout_width="0dp"
             android:layout_height="35dp"
-            android:text="@string/speed"/>
+            android:text="@string/speed" />
     </LinearLayout>
-    <TextView
-        android:id="@+id/static_aod_text"
+
+    <LinearLayout
+        android:id="@+id/linear_layout_static_aod"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="5dp"
-        android:textAlignment="center"
-        android:textSize="15sp"
-        android:textColor="@color/black"
-        android:text="@string/static_aod_opacity"/>
+        android:orientation="horizontal"
+        android:layout_gravity="center">
+
+        <TextView
+            android:id="@+id/static_aod_text"
+            android:layout_marginStart="70dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:layout_weight="1"
+            android:textAlignment="center"
+            android:textSize="15sp"
+            android:textColor="@color/black"
+            android:text="@string/static_aod_opacity" />
+
+        <TextView
+            android:id="@+id/enable_reader_mode_text"
+            android:layout_width="70dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:textAlignment="center"
+            android:textSize="15sp"
+            android:textColor="@color/black"
+            android:text="OFF"
+            app:drawableEndCompat="@drawable/baseline_book_closed_24" />
+    </LinearLayout>
     <LinearLayout
         android:id="@+id/static_aod_linear_layout"
         android:layout_width="match_parent"
