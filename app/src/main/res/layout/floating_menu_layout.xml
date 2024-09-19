@@ -79,16 +79,15 @@
     </LinearLayout>
 
     <LinearLayout
-        android:id="@+id/linear_layout_static_aod"
+        android:id="@+id/static_aod_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_gravity="center">
 
         <TextView
-            android:id="@+id/static_aod_text"
             android:layout_marginStart="70dp"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
             android:layout_weight="1"

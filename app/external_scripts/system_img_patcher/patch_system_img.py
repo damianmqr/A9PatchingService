@@ -312,7 +312,7 @@ def patch_services_jar():
         op_name = str(opacity).replace('.', '_')
         return format_eval(content, center_x = center_x, center_y = center_y, opacity = opacity, radius = radius, bg_opacity = bg_opacity, mix_color = mix_color, bg_mix_color = 1.0 - mix_color)
 
-    shaders = [get_shader_variant(name, centered, opacity, bg_opacity, mix_color) for name in ["color_fade_frag", "color_fade_frag_pause"] for centered in [True, False] for opacity in [0.91, 0.67, 0.25] for bg_opacity in [1.0, 0.6, 0.2, 0.0] for mix_color in [1.0, 0.0] ]
+    shaders = [get_shader_variant(name, centered, opacity, bg_opacity, mix_color) for name in ["color_fade_frag", "color_fade_frag_pause"] for centered in [True, False] for opacity in [0.91, 0.67, 0.45] for bg_opacity in [1.0, 0.6, 0.2, 0.0] for mix_color in [1.0, 0.0] ]
     def find_resource_id(public_xml_path, resource_name, resource_type):
         tree = ET.parse(public_xml_path)
         root = tree.getroot()
@@ -461,27 +461,21 @@ def patch_services_jar():
         first_instruction.expand_after([
             'move-object/from16 v0, p0',
             'move-object/from16 v1, p1',
-            f'invoke-direct {{v0, v1}}, {method.parent.class_name}->handleWakeUpOnVolume(Landroid/view/KeyEvent;)V',
+            f'invoke-direct {{v0, v1}}, {method.parent.class_name}->handleWakeUpOnVolume(Landroid/view/KeyEvent;)Z',
+            'move-result v0',
+            'if-eqz v0, :dont_skip',
+            'const v0, 0x0',
+            'return v0',
+            ':dont_skip',
         ])
         method.parent.items.append((
                     'method',
                     SmaliMethod(
-                        '.method private handleWakeUpOnVolume(Landroid/view/KeyEvent;)V',
+                        '.method private handleWakeUpOnVolume(Landroid/view/KeyEvent;)Z',
                         method.parent,
                         initial_instructions = [
                             '.locals 4',
 
-                            'invoke-virtual {p1}, Landroid/view/KeyEvent;->getKeyCode()I',
-                            'move-result v0',
-                            'const v1, 0x18',
-                            'if-eq v0, v1, :is_volume_event',
-                            'const v1, 0x19',
-                            'if-eq v0, v1, :is_volume_event',
-                            'const v1, 0x1a',
-                            'if-eq v0, v1, :remove_messages',
-                            'goto :return_no_action',
-
-                            ':is_volume_event',
                             'const-string v0, "sys.wakeup_on_volume"',
                             'invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
                             'move-result-object v0',
@@ -490,19 +484,31 @@ def patch_services_jar():
                             'move-result v0',
                             'if-eqz v0, :return_no_action',
 
+                            'invoke-virtual {p1}, Landroid/view/KeyEvent;->getKeyCode()I',
+                            'move-result v0',
+                            'const v1, 0x1a', # POWER
+                            'if-eq v0, v1, :on_power_event',
+                            'const v1, 0x18', # VOLUME UP
+                            'if-eq v0, v1, :is_volume_event',
+                            'const v1, 0x19', # VOLUME DOWN
+                            'if-ne v0, v1, :return_no_action',
+
+                            ':is_volume_event',
                             'invoke-virtual {p1}, Landroid/view/KeyEvent;->getAction()I',
                             'move-result v0',
-                            'if-eqz v0, :acquire_wl',
+                            'if-eqz v0, :on_key_down',
                             'const v1, 0x1',
-                            'if-eq v0, v1, :release_wl',
-                            'goto :return_no_action',
+                            'if-ne v0, v1, :return_no_action',
+                            f'invoke-direct {{p0, p1}}, {method.parent.class_name}->handleVolumeKeyEventUp(Landroid/view/KeyEvent;)Z',
+                            'move-result v0',
+                            'return v0',
 
-                            ':acquire_wl',
-                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mPowerManager:Landroid/os/PowerManager;',
-                            'invoke-virtual {v0}, Landroid/os/PowerManager;->isInteractive()Z',
-                            'move-result v1',
-                            'if-nez v1, :return_no_action',
+                            ':on_key_down',
+                            f'invoke-direct {{p0, p1}}, {method.parent.class_name}->handleVolumeKeyEventDown(Landroid/view/KeyEvent;)Z',
+                            'move-result v0',
+                            'return v0',
 
+                            ':on_power_event',
                             'const-string v2, "sys.linevibrator_touch"',
                             'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
                             'move-result-object v0',
@@ -510,8 +516,8 @@ def patch_services_jar():
                             'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
                             'move-result v0',
                             ':try_number_type_end',
-                            '.catchall {:try_number_type_start .. :try_number_type_end} :continue_acquire',
-                            'if-lez v0, :continue_acquire',
+                            '.catchall {:try_number_type_start .. :try_number_type_end} :skip_flipping',
+                            'if-gez v0, :skip_flipping',
                             'const v1, 0x0',
                             'sub-int v0, v1, v0',
                             'new-instance v1, Ljava/lang/StringBuilder;',
@@ -520,59 +526,228 @@ def patch_services_jar():
                             'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
                             'move-result-object v1',
                             'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
-                            ':continue_acquire',
-
-                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
-                            f'const-wide v1, {hex(5000)}',
-                            'invoke-virtual {v0, v1, v2}, Landroid/os/PowerManager$WakeLock;->acquire(J)V',
-                            ':remove_messages',
-                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mHandler:Landroid/os/Handler;',
-                            f'const v1, {hex(595)}',
-                            'invoke-virtual {v0, v1}, Landroid/os/Handler;->removeMessages(I)V',
-                            f'const v1, {hex(596)}',
-                            'invoke-virtual {v0, v1}, Landroid/os/Handler;->removeMessages(I)V',
-                            'return-void',
-
-                            ':release_wl',
-                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
-                            'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->isHeld()Z',
-                            'move-result v1',
-                            'if-eqz v1, :fix_backlight',
-                            'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->release()V',
-
-                            'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mHandler:Landroid/os/Handler;',
-                            f'const v1, {hex(595)}',
-                            f'const-wide v2, {hex(500)}',
-                            'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
-                            f'const v1, {hex(596)}',
-                            f'const-wide v2, {hex(1550)}',
-                            'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
-                            'return-void',
-
-                            ':fix_backlight',
-                            'const-string v2, "sys.linevibrator_touch"',
-                            'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
-                            'move-result-object v0',
-                            ':try_number_type_start_pre',
-                            'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
-                            'move-result v0',
-                            ':try_number_type_end_pre',
-                            '.catchall {:try_number_type_start_pre .. :try_number_type_end_pre} :return_no_action',
-                            'if-gez v0, :return_no_action',
-                            'const v1, 0x0',
-                            'sub-int v0, v1, v0',
-                            'new-instance v1, Ljava/lang/StringBuilder;',
-                            'invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V',
-                            'invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;',
-                            'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
-                            'move-result-object v1',
-                            'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+                            ':skip_flipping',
 
                             ':return_no_action',
-                            'return-void',
+                            'const/4 v0, 0x0',
+                            'return v0',
                         ]
                     )
                 ))
+
+        method.parent.items.append((
+            'method',
+            SmaliMethod(
+                '.method private handleVolumeKeyEventUp(Landroid/view/KeyEvent;)Z',
+                method.parent,
+                initial_instructions = [
+                    '.locals 4',
+
+                    # RELEASE WAKELOCK
+                    f'iget-object v0, p0, {method.parent.class_name}->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+                    'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->isHeld()Z',
+                    'move-result v1',
+                    'if-eqz v1, :delay_up_key',
+                    'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->release()V',
+
+                    # POST MESSAGES TO TURN SCREEN OFF
+                    f'iget-object v0, p0, {method.parent.class_name}->mHandler:Landroid/os/Handler;',
+
+                    f'const v1, {hex(595)}',
+                    'invoke-virtual {v0, v1}, Landroid/os/Handler;->removeMessages(I)V',
+
+                    f'const v1, {hex(596)}',
+                    'invoke-virtual {v0, v1}, Landroid/os/Handler;->removeMessages(I)V',
+
+                    f'const v1, {hex(595)}',
+                    f'const-wide v2, {hex(500)}',
+                    'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
+
+                    f'const v1, {hex(596)}',
+                    f'const-wide v2, {hex(2650)}',
+                    'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
+
+                    # RETURN
+                    'const/4 v0, 0x0',
+                    'return v0',
+
+                    ':delay_up_key',
+                    # COPY KEYEVENT
+                    'new-instance v0, Landroid/view/KeyEvent;',
+                    'invoke-direct {v0, p1}, Landroid/view/KeyEvent;-><init>(Landroid/view/KeyEvent;)V',
+                    f'iput-object v0, p0, {method.parent.class_name}->mLastUpKeyEvent:Landroid/view/KeyEvent;',
+
+                    # DELAY SENDING UP EVENT
+                    f'iget-object v0, p0, {method.parent.class_name}->mHandler:Landroid/os/Handler;',
+                    f'const v1, {hex(601)}',
+                    f'const-wide v2, {hex(250)}',
+                    'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
+
+                    'const/4 v0, 0x1',
+                    'return v0',
+                ]
+            )
+        ))
+
+        method.parent.items.append((
+                    'method',
+                    SmaliMethod(
+                        '.method private handleVolumeKeyEventDown(Landroid/view/KeyEvent;)Z',
+                        method.parent,
+                        initial_instructions = [
+                            '.locals 4',
+                            # SKIP KEYGUARD CHANGES IF INTERACTIVE
+                            f'iget-object v0, p0, {method.parent.class_name}->mPowerManager:Landroid/os/PowerManager;',
+                            'invoke-virtual {v0}, Landroid/os/PowerManager;->isInteractive()Z',
+                            'move-result v1',
+                            'if-nez v1, :return_no_down_action',
+
+                            # DISABLE BACKLIGHT
+                            'const-string v2, "sys.linevibrator_touch"',
+                            'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+                            'move-result-object v0',
+                            ':try_number_type_start',
+                            'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
+                            'move-result v0',
+                            ':try_number_type_end',
+                            '.catchall {:try_number_type_start .. :try_number_type_end} :skip_flipping',
+                            'if-lez v0, :skip_flipping',
+                            'const v1, 0x0',
+                            'sub-int v0, v1, v0',
+                            'new-instance v1, Ljava/lang/StringBuilder;',
+                            'invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V',
+                            'invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;',
+                            'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
+                            'move-result-object v1',
+                            'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+                            ':skip_flipping',
+
+                            # MAKE KEYGUARD GO AWAY
+                            f'invoke-virtual {{p0}}, {method.parent.class_name}->forceHideKeyguard()V',
+
+                            # SKIP REST IF WAKELOCK IS HELD
+                            f'iget-object v0, p0, {method.parent.class_name}->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+                            'invoke-virtual {v0}, Landroid/os/PowerManager$WakeLock;->isHeld()Z',
+                            'move-result v1',
+                            'if-nez v1, :return_no_down_action',
+
+                            # WAKE UP AND ACQUIRE WAKELOCK
+                            'invoke-static {}, Landroid/os/SystemClock;->uptimeMillis()J',
+                            'move-result-wide v1',
+                            f'invoke-direct {{p0, v1, v2}}, {method.parent.class_name}->wakeUpFromPowerKey(J)V',
+                            f'const-wide v1, {hex(2300)}',
+                            'invoke-virtual {v0, v1, v2}, Landroid/os/PowerManager$WakeLock;->acquire(J)V',
+
+                            # COPY KEYEVENT
+                            'new-instance v0, Landroid/view/KeyEvent;',
+                            'invoke-direct {v0, p1}, Landroid/view/KeyEvent;-><init>(Landroid/view/KeyEvent;)V',
+                            f'iput-object v0, p0, {method.parent.class_name}->mLastDownKeyEvent:Landroid/view/KeyEvent;',
+
+                            # DELAY SENDING THE DOWN EVENT
+                            f'iget-object v0, p0, {method.parent.class_name}->mHandler:Landroid/os/Handler;',
+                            f'const v1, {hex(600)}',
+                            f'const-wide v2, {hex(250)}',
+                            'invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->sendEmptyMessageDelayed(IJ)Z',
+                            'const/4 v0, 0x1',
+                            'return v0',
+
+                            ':return_no_down_action',
+                            'const/4 v0, 0x0',
+                            'return v0',
+                        ]
+                    )
+                ))
+
+        method.parent.items.append((
+            'method',
+            SmaliMethod(
+                '.method public forceHideKeyguard()V',
+                method.parent,
+                initial_instructions = [
+                    '.locals 3',
+                    f'iget-object v0, p0, {method.parent.class_name}->mKeyguardDelegate:Lcom/android/server/policy/keyguard/KeyguardServiceDelegate;',
+                    'if-eqz v0, :no_delegate',
+                    'invoke-static {}, Landroid/os/SystemClock;->uptimeMillis()J',
+                    'move-result-wide v1',
+                    'invoke-virtual {v0, v1, v2}, Lcom/android/server/policy/keyguard/KeyguardServiceDelegate;->startKeyguardExitAnimation(J)V'
+                    ':no_delegate',
+                    'return-void',
+                ]
+            )
+        ))
+
+        method.parent.items.append((
+            'method',
+            SmaliMethod(
+                '.method public sendPastKeyUpEvent()V',
+                method.parent,
+                initial_instructions = [
+                    '.locals 3',
+                    f'iget-object v1, p0, {method.parent.class_name}->mLastUpKeyEvent:Landroid/view/KeyEvent;',
+                    'if-eqz v1, :no_up_event',
+                    'invoke-static {}, Landroid/hardware/input/InputManager;->getInstance()Landroid/hardware/input/InputManager;',
+                    'move-result-object v0',
+                    'const/4 v2, 0x0',
+                    'invoke-virtual {v0, v1, v2}, Landroid/hardware/input/InputManager;->injectInputEvent(Landroid/view/InputEvent;I)Z',
+                    'const v0, 0x0',
+                    f'iput-object v0, p0, {method.parent.class_name}->mLastUpKeyEvent:Landroid/view/KeyEvent;',
+                    ':no_up_event',
+                    'return-void',
+                ]
+            )
+        ))
+
+        method.parent.items.append((
+            'method',
+            SmaliMethod(
+                '.method public sendPastKeyDownEvent()V',
+                method.parent,
+                initial_instructions = [
+                    '.locals 3',
+                    f'iget-object v1, p0, {method.parent.class_name}->mLastDownKeyEvent:Landroid/view/KeyEvent;',
+                    'if-eqz v1, :no_down_event',
+                    'invoke-static {}, Landroid/hardware/input/InputManager;->getInstance()Landroid/hardware/input/InputManager;',
+                    'move-result-object v0',
+                    'const/4 v2, 0x0',
+                    'invoke-virtual {v0, v1, v2}, Landroid/hardware/input/InputManager;->injectInputEvent(Landroid/view/InputEvent;I)Z',
+                    'const v0, 0x0',
+                    f'iput-object v0, p0, {method.parent.class_name}->mLastDownKeyEvent:Landroid/view/KeyEvent;',
+                    ':no_down_event',
+                    'return-void',
+                ]
+            )
+        ))
+
+        method.parent.items.append((
+            'method',
+            SmaliMethod(
+                '.method public flipMaxBrightness(I)V',
+                method.parent,
+                initial_instructions = [
+                    '.locals 3',
+                    'const-string v2, "sys.linevibrator_touch"',
+                    'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
+                    'move-result-object v0',
+                    ':try_number_type_start',
+                    'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
+                    'move-result v0',
+                    ':try_number_type_end',
+                    '.catchall {:try_number_type_start .. :try_number_type_end} :skip_flipping',
+                    'xor-int v0, v0, p1',
+                    'if-ltz v0, :skip_flipping',
+                    'const v1, 0x0',
+                    'sub-int v0, v1, v0',
+                    'new-instance v1, Ljava/lang/StringBuilder;',
+                    'invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V',
+                    'invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;',
+                    'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
+                    'move-result-object v1',
+                    'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+                    ':skip_flipping',
+                    'return-void',
+                ]
+            )
+        ))
 
     def patch_phoneWindowManagerInit(instruction):
         registers = instruction.next.get_n_free_registers(2)
@@ -581,25 +756,46 @@ def patch_services_jar():
             f'const-string {registers[1]}, "Sys::VolumeWakeLock"',
             f'invoke-virtual {{{instruction.registers[0]}, {registers[0]}, {registers[1]}}}, Landroid/os/PowerManager;->newWakeLock(ILjava/lang/String;)Landroid/os/PowerManager$WakeLock;',
             f'move-result-object {registers[0]}',
-            f'iput-object {registers[0]}, {instruction.registers[1]}, Lcom/android/server/policy/PhoneWindowManager;->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+            f'iput-object {registers[0]}, {instruction.registers[1]}, {instruction.parent.parent.class_name}->mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;',
+            f'const {registers[0]}, 0x0',
+            f'iput-object {registers[0]}, {instruction.registers[1]}, {instruction.parent.parent.class_name}->mLastDownKeyEvent:Landroid/view/KeyEvent;',
+            f'iput-object {registers[0]}, {instruction.registers[1]}, {instruction.parent.parent.class_name}->mLastUpKeyEvent:Landroid/view/KeyEvent;',
         ])
 
     def patch_windowManagerHandler(method):
         method.first_instruction.get_n_free_registers(4)
         method.first_instruction.expand_after([
             'iget v0, p1, Landroid/os/Message;->what:I',
+            f'const v1, {hex(595)}',
+            'if-eq v0, v1, :handle_go_to_sleep',
             f'const v1, {hex(596)}',
-            'if-ne v0, v1, :handle_go_to_sleep',
+            'if-eq v0, v1, :handle_fix_backlight',
+            f'const v1, {hex(600)}',
+            'if-eq v0, v1, :handle_down',
+            f'const v1, {hex(601)}',
+            'if-eq v0, v1, :handle_up',
+            'goto :handle_other_messages',
 
+            ':handle_down',
+            f'iget-object v0, p0, {method.parent.class_name}->this$0:{method.parent.class_name.split("$")[0]};',
+            f'invoke-virtual {{v0}}, {method.parent.class_name.split("$")[0]};->sendPastKeyDownEvent()V',
+            'return-void',
+
+            ':handle_up',
+            f'iget-object v0, p0, {method.parent.class_name}->this$0:{method.parent.class_name.split("$")[0]};',
+            f'invoke-virtual {{v0}}, {method.parent.class_name.split("$")[0]};->sendPastKeyUpEvent()V',
+            'return-void',
+
+            ':handle_fix_backlight',
             'const-string v2, "sys.linevibrator_touch"',
             'invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;',
             'move-result-object v0',
-            ':try_number_type_start_pre',
+            ':try_number_type_start',
             'invoke-static {v0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I',
             'move-result v0',
-            ':try_number_type_end_pre',
-            '.catchall {:try_number_type_start_pre .. :try_number_type_end_pre} :handle_other_messages',
-            'if-gez v0, :handle_other_messages',
+            ':try_number_type_end',
+            '.catchall {:try_number_type_start .. :try_number_type_end} :skip_flipping',
+            'if-gez v0, :skip_flipping',
             'const v1, 0x0',
             'sub-int v0, v1, v0',
             'new-instance v1, Ljava/lang/StringBuilder;',
@@ -608,17 +804,18 @@ def patch_services_jar():
             'invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;',
             'move-result-object v1',
             'invoke-static {v2, v1}, Landroid/os/SystemProperties;->set(Ljava/lang/String;Ljava/lang/String;)V',
+            ':skip_flipping',
+            'return-void',
 
             ':handle_go_to_sleep',
-            f'const v1, {hex(595)}',
-            'if-ne v0, v1, :handle_other_messages',
-            f'iget-object v0, p0, {method.parent.class_name}->this$0:Lcom/android/server/policy/PhoneWindowManager;',
-            'iget-object v1, v0, Lcom/android/server/policy/PhoneWindowManager;->mPowerManager:Landroid/os/PowerManager;',
+            f'iget-object v0, p0, {method.parent.class_name}->this$0:{method.parent.class_name.split("$")[0]};',
+            f'iget-object v1, v0, {method.parent.class_name.split("$")[0]};->mPowerManager:Landroid/os/PowerManager;',
             'invoke-static {}, Landroid/os/SystemClock;->uptimeMillis()J',
             'move-result-wide v2',
             'invoke-virtual {v1, v2, v3}, Landroid/os/PowerManager;->goToSleep(J)V',
-
+            f'invoke-virtual {{v0}}, {method.parent.class_name.split("$")[0]};->forceHideKeyguard()V',
             'return-void',
+
             ':handle_other_messages',
         ])
 
@@ -654,6 +851,12 @@ def patch_services_jar():
                     ),
                     InstructionPatch(
                         action = lambda file: file.smali_class.add_field(".field private mVolumeWakeLock:Landroid/os/PowerManager$WakeLock;")
+                    ),
+                    InstructionPatch(
+                        action = lambda file: file.smali_class.add_field(".field private mLastUpKeyEvent:Landroid/view/KeyEvent;")
+                    ),
+                    InstructionPatch(
+                        action = lambda file: file.smali_class.add_field(".field private mLastDownKeyEvent:Landroid/view/KeyEvent;")
                     ),
                 ],
             ),
@@ -1178,7 +1381,7 @@ def patch_AddTintToCall():
         'android': 'http://schemas.android.com/apk/res/android',
         'app': 'http://schemas.android.com/apk/res-auto'
     }
-    
+
     for prefix, uri in namespaces.items():
         ET.register_namespace(prefix, uri)
 
@@ -1226,8 +1429,6 @@ def update_build_prop():
         "ro.secure": "1",
         "ro.debuggable": "0",
         "ro.build.type": "user",
-        # Enable AOD
-        "persist.sys.overlay.aod": "true",
         # Disable blur
         "ro.launcher.blur.appLaunch": "0",
         "ro.surface_flinger.supports_background_blur": "0",
@@ -1300,12 +1501,12 @@ def update_vndk_rc():
 
         if not any("on property:sys.linevibrator_open=*" in line for line in lines):
             file.write("\non property:sys.linevibrator_open=*\n")
-            file.write("    write /sys/class/backlight/ktd3137-bl-3/brightness ${sys.linevibrator_open}\n")
+            #file.write("    write /sys/class/backlight/ktd3137-bl-3/brightness ${sys.linevibrator_open}\n")
             file.write("    write /sys/class/backlight/aw99703-bl-1/brightness ${sys.linevibrator_open}\n\n")
 
         if not any("on property:sys.linevibrator_short=*" in line for line in lines):
             file.write("\non property:sys.linevibrator_short=*\n")
-            file.write("    write /sys/class/backlight/ktd3137-bl-4/brightness ${sys.linevibrator_short}\n")
+            #file.write("    write /sys/class/backlight/ktd3137-bl-4/brightness ${sys.linevibrator_short}\n")
             file.write("    write /sys/class/backlight/aw99703-bl-2/brightness ${sys.linevibrator_short}\n\n")
 
 def main():
@@ -1342,6 +1543,7 @@ def main():
         update_build_prop()
         try:
             patch_CallUI()
+            pass
         except subprocess.CalledProcessError:
             logging.warning('Dialer app patching error, skipping.')
         patch_systemui()

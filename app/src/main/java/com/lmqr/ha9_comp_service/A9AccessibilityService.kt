@@ -233,7 +233,7 @@ class A9AccessibilityService : AccessibilityService(),
                     }
                     updateButtons(refreshModeManager.currentMode)
                     val staticAodVisibility =
-                        if(sharedPreferences.getBoolean("show_per_app_aod_settings", false))
+                        if(!sharedPreferences.getBoolean("disable_show_per_app_aod_settings", false))
                             View.VISIBLE
                         else
                             View.GONE
@@ -300,7 +300,7 @@ class A9AccessibilityService : AccessibilityService(),
                         updateButtons(staticAODOpacityManager.currentOpacity, staticAODOpacityManager.isReader)
                     }
                     val staticAodVisibility =
-                        if(sharedPreferences.getBoolean("show_per_app_aod_settings", false))
+                        if(!sharedPreferences.getBoolean("disable_show_per_app_aod_settings", false))
                             View.VISIBLE
                         else
                             View.GONE
